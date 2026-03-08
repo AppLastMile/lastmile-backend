@@ -19,11 +19,14 @@ export class PickupPoint {
   @Column({ length: 180 })
   address!: string;
 
-  @Column({ type: 'double precision' })
-  latitude!: number;
+  @Column({ type: 'int', default: 0 })
+  eventId!: number;
 
-  @Column({ type: 'double precision' })
-  longitude!: number;
+  @Column({ type: 'double precision', nullable: true })
+  latitude!: number | null;
+
+  @Column({ type: 'double precision', nullable: true })
+  longitude!: number | null;
 
   @CreateDateColumn()
   createdAt!: Date;

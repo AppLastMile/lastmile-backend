@@ -68,7 +68,7 @@ export class UsersService {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.max(1, Math.ceil(total / limit)),
       },
     };
   }
@@ -119,6 +119,7 @@ export class UsersService {
   private toUserResponse(user: User): UserResponseDto {
     return {
       id: user.id,
+      fullName: user.name,
       name: user.name,
       email: user.email,
       role: user.role,

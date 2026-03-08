@@ -23,7 +23,7 @@ export class Shipment {
   @Column()
   pickupPointId!: number;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   assignedVolunteerId!: number | null;
 
   @Column({

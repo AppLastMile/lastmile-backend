@@ -2,31 +2,38 @@ import {
   IsEnum,
   IsInt,
   IsNumber,
+  IsOptional,
   IsString,
   Min,
   MinLength,
 } from 'class-validator';
 import { CampaignType } from '../entities/campaign.entity';
 
-export class CreateCampaignDto {
+export class UpdateCampaignDto {
+  @IsOptional()
   @IsString()
   @MinLength(3)
-  name!: string;
+  name?: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(10)
-  description!: string;
+  description?: string;
 
+  @IsOptional()
   @IsEnum(CampaignType)
-  campaignType!: CampaignType;
+  campaignType?: CampaignType;
 
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  goalMoney!: number;
+  goalMoney?: number;
 
+  @IsOptional()
   @IsInt()
-  eventId!: number;
+  eventId?: number;
 
+  @IsOptional()
   @IsInt()
-  createdBy!: number;
+  createdBy?: number;
 }

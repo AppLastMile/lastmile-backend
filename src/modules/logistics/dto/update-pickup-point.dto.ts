@@ -1,4 +1,10 @@
-import { IsNumber, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 
 export class UpdatePickupPointDto {
   @IsOptional()
@@ -13,6 +19,10 @@ export class UpdatePickupPointDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  @IsOptional()
+  @IsInt()
+  eventId?: number;
 
   @IsOptional()
   @IsNumber()

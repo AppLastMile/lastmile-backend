@@ -11,8 +11,10 @@ import {
 import { AssignShipmentVolunteerDto } from './dto/assign-shipment-volunteer.dto';
 import { CreatePickupPointDto } from './dto/create-pickup-point.dto';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
+import { FindPickupPointsQueryDto } from './dto/find-pickup-points-query.dto';
 import { FindShipmentsQueryDto } from './dto/find-shipments-query.dto';
 import {
+  PaginatedPickupPointsDto,
   PaginatedShipmentsDto,
   PickupPointResponseDto,
   ShipmentResponseDto,
@@ -33,8 +35,10 @@ export class LogisticsController {
   }
 
   @Get('pickup-points')
-  findPickupPoints(): Promise<PickupPointResponseDto[]> {
-    return this.logisticsService.findPickupPoints();
+  findPickupPoints(
+    @Query() query: FindPickupPointsQueryDto,
+  ): Promise<PaginatedPickupPointsDto> {
+    return this.logisticsService.findPickupPoints(query);
   }
 
   @Get('pickup-points/:id')

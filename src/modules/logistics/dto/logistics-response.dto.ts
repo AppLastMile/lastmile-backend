@@ -5,9 +5,19 @@ export class PickupPointResponseDto {
   name!: string;
   city!: string;
   address!: string;
-  latitude!: number;
-  longitude!: number;
-  createdAt!: Date;
+  eventId!: number;
+  latitude?: number;
+  longitude?: number;
+}
+
+export class PaginatedPickupPointsDto {
+  data!: PickupPointResponseDto[];
+  meta!: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 }
 
 export class ShipmentResponseDto {

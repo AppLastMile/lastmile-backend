@@ -7,8 +7,10 @@ import { ShipmentDeliveredEvent } from '../../events/shipment-delivered.event';
 import { AssignShipmentVolunteerDto } from './dto/assign-shipment-volunteer.dto';
 import { CreatePickupPointDto } from './dto/create-pickup-point.dto';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
+import { FindPickupPointsQueryDto } from './dto/find-pickup-points-query.dto';
 import { FindShipmentsQueryDto } from './dto/find-shipments-query.dto';
 import {
+  PaginatedPickupPointsDto,
   PaginatedShipmentsDto,
   PickupPointResponseDto,
   ShipmentResponseDto,
@@ -38,14 +40,30 @@ export class LogisticsService {
     return this.toPickupPointResponse(savedPickupPoint);
   }
 
-  async findPickupPoints(): Promise<PickupPointResponseDto[]> {
-    const pickupPoints = await this.pickupPointsRepository.find({
-      order: { createdAt: 'DESC' },
-    });
+  async findPickupPoints(
+    query: FindPickupPointsQueryDto,
+  ): Promise<PaginatedPickupPointsDto> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
 
-    return pickupPoints.map((pickupPoint) =>
-      this.toPickupPointResponse(pickupPoint),
-    );
+    const qb = this.pickupPointsRepository.createQueryBuilder('pickupPoint');
+    qb.orderBy('pickupPoint.createdAt', 'DESC');
+    qb.skip((page - 1) * limit);
+    qb.take(limit);
+
+    const [pickupPoints, total] = await qb.getManyAndCount();
+
+    return {
+      data: pickupPoints.map((pickupPoint) =>
+        this.toPickupPointResponse(pickupPoint),
+      ),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
   }
 
   async findPickupPointById(id: number): Promise<PickupPointResponseDto> {
@@ -143,7 +161,7 @@ export class LogisticsService {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.max(1, Math.ceil(total / limit)),
       },
     };
   }
@@ -242,9 +260,9 @@ export class LogisticsService {
       name: pickupPoint.name,
       city: pickupPoint.city,
       address: pickupPoint.address,
-      latitude: pickupPoint.latitude,
-      longitude: pickupPoint.longitude,
-      createdAt: pickupPoint.createdAt,
+      eventId: pickupPoint.eventId,
+      latitude: pickupPoint.latitude ?? undefined,
+      longitude: pickupPoint.longitude ?? undefined,
     };
   }
 

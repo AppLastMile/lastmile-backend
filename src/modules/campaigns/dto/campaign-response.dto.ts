@@ -9,7 +9,6 @@ export class CampaignResponseDto {
   collectedMoney!: number;
   eventId!: number;
   createdBy!: number;
-  createdAt!: Date;
 }
 
 export class PaginatedCampaignsDto {

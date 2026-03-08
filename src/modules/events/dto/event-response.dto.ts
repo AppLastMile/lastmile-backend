@@ -6,7 +6,6 @@ export class EventResponseDto {
   description!: string;
   date!: Date;
   createdBy!: number;
-  createdAt!: Date;
 }
 
 export class PaginatedEventsDto {

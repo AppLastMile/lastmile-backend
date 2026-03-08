@@ -75,7 +75,7 @@ export class EventsService {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.max(1, Math.ceil(total / limit)),
       },
     };
   }
@@ -120,7 +120,6 @@ export class EventsService {
       description: event.description,
       date: event.date,
       createdBy: event.createdBy,
-      createdAt: event.createdAt,
     };
   }
 }

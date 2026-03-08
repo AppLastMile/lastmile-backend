@@ -1,0 +1,1 @@
+/usr/bin/postgres "-D" ".postgres-data" "-p" "5432" "-k" "/home/seb/Documentos/ARSW/LastMile/lastmile-backend/.postgres-data"

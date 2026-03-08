@@ -4,6 +4,8 @@ import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 export function getTypeOrmConfig(
   configService: ConfigService,
 ): TypeOrmModuleOptions {
+  const isProduction = process.env.NODE_ENV === 'production';
+
   return {
     type: 'postgres',
     host: configService.getOrThrow<string>('DB_HOST'),
@@ -12,6 +14,6 @@ export function getTypeOrmConfig(
     password: configService.getOrThrow<string>('DB_PASSWORD'),
     database: configService.getOrThrow<string>('DB_NAME'),
     autoLoadEntities: true,
-    synchronize: false,
+    synchronize: !isProduction,
   };
 }

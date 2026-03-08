@@ -85,7 +85,7 @@ export class CampaignsService {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.max(1, Math.ceil(total / limit)),
       },
     };
   }
@@ -163,7 +163,6 @@ export class CampaignsService {
       collectedMoney: Number(campaign.collectedMoney),
       eventId: campaign.eventId,
       createdBy: campaign.createdBy,
-      createdAt: campaign.createdAt,
     };
   }
 }

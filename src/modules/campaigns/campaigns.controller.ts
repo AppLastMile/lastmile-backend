@@ -15,6 +15,7 @@ import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { FindCampaignsQueryDto } from './dto/find-campaigns-query.dto';
 import {
+  CampaignItemsSummaryResponseDto,
   CampaignResponseDto,
   PaginatedCampaignsDto,
 } from './dto/campaign-response.dto';
@@ -47,6 +48,13 @@ export class CampaignsController {
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number): Promise<CampaignResponseDto> {
     return this.campaignsService.findOneById(id);
+  }
+
+  @Get(':campaignId/items-summary')
+  getItemsSummary(
+    @Param('campaignId', ParseIntPipe) campaignId: number,
+  ): Promise<CampaignItemsSummaryResponseDto> {
+    return this.campaignsService.getItemsSummary(campaignId);
   }
 
   @Patch(':id')

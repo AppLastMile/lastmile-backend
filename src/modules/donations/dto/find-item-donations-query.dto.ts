@@ -43,4 +43,10 @@ export class FindItemDonationsQueryDto {
   @IsString()
   @MinLength(2)
   itemName?: string;
+
+  @IsOptional()
+  @Transform(({ value }: { value: string }) => value?.trim())
+  @IsString()
+  @MinLength(2)
+  itemType?: string;
 }

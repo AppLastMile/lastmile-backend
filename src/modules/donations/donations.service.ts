@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { CampaignInventoryUpdatedEvent } from '../../events/campaign-inventory-updated.event';
 import { DonationCreatedEvent } from '../../events/donation-created.event';
 import { DonationItemReceivedEvent } from '../../events/donation-item-received.event';
 import { Campaign } from '../campaigns/entities/campaign.entity';
@@ -105,12 +106,28 @@ export class DonationsService {
   ): Promise<DonationItemResponseDto> {
     await this.ensureCampaignExists(dto.campaignId);
 
+    const itemType = dto.itemType ?? dto.itemName;
+    if (!itemType) {
+      throw new NotFoundException('itemType or itemName is required');
+    }
+
     const donationItem = this.donationItemRepository.create({
-      ...dto,
+      campaignId: dto.campaignId,
+      donorId: dto.donorId,
+      itemName: itemType,
+      notes: dto.notes ?? null,
+      quantity: dto.quantity,
       status: DonationItemStatus.PENDING,
     });
     const savedDonationItem =
       await this.donationItemRepository.save(donationItem);
+
+    const inventoryPayload: CampaignInventoryUpdatedEvent = {
+      campaignId: savedDonationItem.campaignId,
+      itemType: savedDonationItem.itemName,
+      quantity: savedDonationItem.quantity,
+    };
+    this.eventEmitter.emit('campaign.inventory.updated', inventoryPayload);
 
     return this.toItemDonationResponse(savedDonationItem);
   }
@@ -141,9 +158,10 @@ export class DonationsService {
       });
     }
 
-    if (query.itemName) {
+    const itemNameFilter = query.itemType ?? query.itemName;
+    if (itemNameFilter) {
       qb.andWhere('LOWER(donationItem.itemName) LIKE :itemName', {
-        itemName: `%${query.itemName.toLowerCase()}%`,
+        itemName: `%${itemNameFilter.toLowerCase()}%`,
       });
     }
 
@@ -237,7 +255,9 @@ export class DonationsService {
       campaignId: donation.campaignId,
       donorId: donation.donorId,
       itemName: donation.itemName,
+      itemType: donation.itemName,
       quantity: donation.quantity,
+      notes: donation.notes,
       status: donation.status,
       createdAt: donation.createdAt,
     };

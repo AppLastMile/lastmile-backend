@@ -13,7 +13,9 @@ export class DonationItemResponseDto {
   campaignId!: number;
   donorId!: number;
   itemName!: string;
+  itemType!: string;
   quantity!: number;
+  notes!: string | null;
   status!: DonationItemStatus;
   createdAt!: Date;
 }

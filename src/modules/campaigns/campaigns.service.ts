@@ -5,7 +5,9 @@ import { Repository } from 'typeorm';
 import { CampaignCreatedEvent } from '../../events/campaign-created.event';
 import type { DonationCreatedEvent } from '../../events/donation-created.event';
 import { Event } from '../events/entities/event.entity';
+import { DonationItem } from '../donations/entities/donation-item.entity';
 import {
+  CampaignItemsSummaryResponseDto,
   CampaignResponseDto,
   PaginatedCampaignsDto,
 } from './dto/campaign-response.dto';
@@ -21,6 +23,8 @@ export class CampaignsService {
     private readonly campaignsRepository: Repository<Campaign>,
     @InjectRepository(Event)
     private readonly eventsRepository: Repository<Event>,
+    @InjectRepository(DonationItem)
+    private readonly donationItemsRepository: Repository<DonationItem>,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
@@ -99,6 +103,37 @@ export class CampaignsService {
     return this.toCampaignResponse(campaign);
   }
 
+  async getItemsSummary(
+    campaignId: number,
+  ): Promise<CampaignItemsSummaryResponseDto> {
+    await this.ensureCampaignExists(campaignId);
+
+    const summaryRows = await this.donationItemsRepository
+      .createQueryBuilder('donationItem')
+      .select('donationItem.itemName', 'itemType')
+      .addSelect('SUM(donationItem.quantity)', 'quantity')
+      .where('donationItem.campaignId = :campaignId', { campaignId })
+      .groupBy('donationItem.itemName')
+      .orderBy('itemType', 'ASC')
+      .getRawMany<{ itemType: string; quantity: string }>();
+
+    const latestDonation = await this.donationItemsRepository
+      .createQueryBuilder('donationItem')
+      .where('donationItem.campaignId = :campaignId', { campaignId })
+      .orderBy('donationItem.createdAt', 'DESC')
+      .select(['donationItem.createdAt'])
+      .getOne();
+
+    return {
+      campaignId,
+      items: summaryRows.map((row) => ({
+        itemType: row.itemType,
+        quantity: Number(row.quantity),
+      })),
+      updatedAt: latestDonation?.createdAt ?? new Date(),
+    };
+  }
+
   async update(
     id: number,
     dto: UpdateCampaignDto,
@@ -150,6 +185,19 @@ export class CampaignsService {
 
     if (!event) {
       throw new NotFoundException(`Event with id ${eventId} was not found`);
+    }
+  }
+
+  private async ensureCampaignExists(campaignId: number): Promise<void> {
+    const campaign = await this.campaignsRepository.findOne({
+      where: { id: campaignId },
+      select: { id: true },
+    });
+
+    if (!campaign) {
+      throw new NotFoundException(
+        `Campaign with id ${campaignId} was not found`,
+      );
     }
   }
 

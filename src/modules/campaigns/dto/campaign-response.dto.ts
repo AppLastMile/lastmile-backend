@@ -20,3 +20,14 @@ export class PaginatedCampaignsDto {
     totalPages: number;
   };
 }
+
+export class CampaignItemSummaryDto {
+  itemType!: string;
+  quantity!: number;
+}
+
+export class CampaignItemsSummaryResponseDto {
+  campaignId!: number;
+  items!: CampaignItemSummaryDto[];
+  updatedAt!: Date;
+}

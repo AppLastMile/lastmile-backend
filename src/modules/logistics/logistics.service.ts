@@ -4,6 +4,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Repository } from 'typeorm';
 import { ShipmentAssignedEvent } from '../../events/shipment-assigned.event';
 import { ShipmentDeliveredEvent } from '../../events/shipment-delivered.event';
+import { ShipmentLocationChangedEvent } from '../../events/shipment-location-changed.event';
+import { ShipmentStatusChangedEvent } from '../../events/shipment-status-changed.event';
 import { AssignShipmentVolunteerDto } from './dto/assign-shipment-volunteer.dto';
 import { CreatePickupPointDto } from './dto/create-pickup-point.dto';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
@@ -18,6 +20,7 @@ import {
 import { UpdatePickupPointDto } from './dto/update-pickup-point.dto';
 import { UpdateShipmentStatusDto } from './dto/update-shipment-status.dto';
 import { PickupPoint } from './entities/pickup-point.entity';
+import { ShipmentLocationHistory } from './entities/shipment-location-history.entity';
 import { Shipment, ShipmentStatus } from './entities/shipment.entity';
 
 @Injectable()
@@ -27,6 +30,8 @@ export class LogisticsService {
     private readonly pickupPointsRepository: Repository<PickupPoint>,
     @InjectRepository(Shipment)
     private readonly shipmentsRepository: Repository<Shipment>,
+    @InjectRepository(ShipmentLocationHistory)
+    private readonly shipmentLocationsRepository: Repository<ShipmentLocationHistory>,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
@@ -209,10 +214,24 @@ export class LogisticsService {
       throw new NotFoundException(`Shipment with id ${id} was not found`);
     }
 
+    const previousStatus = shipment.status;
+
     const updatedShipment = await this.shipmentsRepository.save({
       ...shipment,
       status: dto.status,
     });
+
+    if (previousStatus !== updatedShipment.status) {
+      const statusChangedPayload: ShipmentStatusChangedEvent = {
+        shipmentId: updatedShipment.id,
+        campaignId: updatedShipment.campaignId,
+        previousStatus,
+        status: updatedShipment.status,
+        updatedBy: updatedShipment.assignedVolunteerId ?? 0,
+        updatedAt: new Date(),
+      };
+      this.eventEmitter.emit('shipment.status.changed', statusChangedPayload);
+    }
 
     if (dto.status === ShipmentStatus.DELIVERED) {
       const eventPayload: ShipmentDeliveredEvent = {
@@ -224,6 +243,53 @@ export class LogisticsService {
     }
 
     return this.toShipmentResponse(updatedShipment);
+  }
+
+  async createShipmentLocationUpdate(params: {
+    shipmentId: number;
+    lat: number;
+    lng: number;
+    speed?: number | null;
+    heading?: number | null;
+    recordedAt?: Date;
+    updatedBy: number;
+  }): Promise<ShipmentLocationHistory> {
+    const shipment = await this.shipmentsRepository.findOne({
+      where: { id: params.shipmentId },
+    });
+
+    if (!shipment) {
+      throw new NotFoundException(
+        `Shipment with id ${params.shipmentId} was not found`,
+      );
+    }
+
+    const row = await this.shipmentLocationsRepository.save(
+      this.shipmentLocationsRepository.create({
+        shipmentId: shipment.id,
+        campaignId: shipment.campaignId,
+        lat: params.lat,
+        lng: params.lng,
+        speed: params.speed ?? null,
+        heading: params.heading ?? null,
+        recordedAt: params.recordedAt ?? new Date(),
+        updatedBy: params.updatedBy,
+      }),
+    );
+
+    const locationChangedPayload: ShipmentLocationChangedEvent = {
+      shipmentId: row.shipmentId,
+      campaignId: row.campaignId,
+      lat: row.lat,
+      lng: row.lng,
+      speed: row.speed,
+      heading: row.heading,
+      recordedAt: row.recordedAt,
+      updatedBy: row.updatedBy,
+    };
+    this.eventEmitter.emit('shipment.location.changed', locationChangedPayload);
+
+    return row;
   }
 
   private async ensurePickupPointExists(pickupPointId: number): Promise<void> {

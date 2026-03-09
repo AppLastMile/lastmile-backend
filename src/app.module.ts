@@ -14,6 +14,7 @@ import { DonationsModule } from './modules/donations/donations.module';
 import { LogisticsModule } from './modules/logistics/logistics.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { AuctionsModule } from './modules/auctions/auctions.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { AuctionsModule } from './modules/auctions/auctions.module';
     AuctionsModule,
     LogisticsModule,
     ChatModule,
+    RealtimeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -5,6 +5,7 @@ type EnvConfig = {
   DB_USERNAME: string;
   DB_PASSWORD: string;
   DB_NAME: string;
+  JWT_SECRET: string;
 };
 
 function getRequiredString(
@@ -48,5 +49,6 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
     DB_USERNAME: getRequiredString(config, 'DB_USERNAME'),
     DB_PASSWORD: getRequiredString(config, 'DB_PASSWORD'),
     DB_NAME: getRequiredString(config, 'DB_NAME'),
+    JWT_SECRET: getRequiredString(config, 'JWT_SECRET'),
   };
 }

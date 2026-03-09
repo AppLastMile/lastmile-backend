@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
 import { Event } from '../../events/entities/event.entity';
 import { Shipment } from '../../logistics/entities/shipment.entity';
-import { User, UserRole } from '../../users/entities/user.entity';
+import { UserRole } from '../../users/entities/user.entity';
 import { AuthUser } from './realtime-auth.service';
 
 @Injectable()
@@ -16,8 +16,6 @@ export class RoomAuthorizationService {
     private readonly shipmentsRepository: Repository<Shipment>,
     @InjectRepository(Event)
     private readonly eventsRepository: Repository<Event>,
-    @InjectRepository(User)
-    private readonly usersRepository: Repository<User>,
   ) {}
 
   async validateAndNormalizeRoom(room: string, user: AuthUser): Promise<string> {
@@ -64,8 +62,9 @@ export class RoomAuthorizationService {
       throw new ForbiddenException('Campaign room does not exist');
     }
 
-    // Current policy: any authenticated platform user can access campaign public rooms.
-    await this.ensureUserExists(user.userId);
+    // Current policy: any connected user can access campaign public rooms.
+    // In production, replace this with strict membership checks.
+    void user;
   }
 
   private async ensureShipmentAllowed(shipmentId: number, user: AuthUser): Promise<void> {
@@ -106,14 +105,4 @@ export class RoomAuthorizationService {
     throw new ForbiddenException('You are not allowed to subscribe to this event ops room');
   }
 
-  private async ensureUserExists(userId: number): Promise<void> {
-    const user = await this.usersRepository.findOne({
-      where: { id: userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new ForbiddenException('Authenticated user does not exist');
-    }
-  }
 }

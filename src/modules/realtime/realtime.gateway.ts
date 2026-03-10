@@ -293,6 +293,22 @@ export class RealtimeGateway
         room,
         serverTime: new Date().toISOString(),
       });
+
+      const latestLocation = await this.shipmentLocationsRepository.findOne({
+        where: { shipmentId },
+        order: { recordedAt: 'DESC', id: 'DESC' },
+      });
+
+      if (latestLocation) {
+        client.emit('shipment.location.snapshot', {
+          shipmentId,
+          lat: latestLocation.lat,
+          lng: latestLocation.lng,
+          speed: latestLocation.speed,
+          heading: latestLocation.heading,
+          recordedAt: latestLocation.recordedAt.toISOString(),
+        });
+      }
     } catch (error) {
       this.emitSystemError(client, error, 'FORBIDDEN_ROOM');
     }
@@ -324,6 +340,10 @@ export class RealtimeGateway
 
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
         throw new BadRequestException('lat/lng are required');
+      }
+
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        throw new BadRequestException('lat/lng are out of range');
       }
 
       await this.roomAuthorizationService.validateAndNormalizeRoom(
@@ -368,6 +388,11 @@ export class RealtimeGateway
         lng,
         speed: row.speed,
         heading: row.heading,
+        recordedAt: row.recordedAt.toISOString(),
+      });
+
+      client.emit('shipment.location.ack', {
+        shipmentId,
         recordedAt: row.recordedAt.toISOString(),
       });
     } catch (error) {

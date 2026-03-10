@@ -12,11 +12,14 @@ import { AssignShipmentVolunteerDto } from './dto/assign-shipment-volunteer.dto'
 import { CreatePickupPointDto } from './dto/create-pickup-point.dto';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { FindPickupPointsQueryDto } from './dto/find-pickup-points-query.dto';
+import { FindShipmentLocationHistoryQueryDto } from './dto/find-shipment-location-history-query.dto';
 import { FindShipmentsQueryDto } from './dto/find-shipments-query.dto';
 import {
   PaginatedPickupPointsDto,
   PaginatedShipmentsDto,
   PickupPointResponseDto,
+  ShipmentLocationHistoryResponseDto,
+  ShipmentLocationPointResponseDto,
   ShipmentResponseDto,
 } from './dto/logistics-response.dto';
 import { UpdatePickupPointDto } from './dto/update-pickup-point.dto';
@@ -73,6 +76,21 @@ export class LogisticsController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ShipmentResponseDto> {
     return this.logisticsService.findShipmentById(id);
+  }
+
+  @Get('shipments/:id/location/latest')
+  findShipmentLatestLocation(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ShipmentLocationPointResponseDto | null> {
+    return this.logisticsService.findShipmentLatestLocation(id);
+  }
+
+  @Get('shipments/:id/location/history')
+  findShipmentLocationHistory(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: FindShipmentLocationHistoryQueryDto,
+  ): Promise<ShipmentLocationHistoryResponseDto> {
+    return this.logisticsService.findShipmentLocationHistory(id, query);
   }
 
   @Patch('shipments/:id/assign-volunteer')

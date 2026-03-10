@@ -29,6 +29,27 @@ export class ShipmentResponseDto {
   createdAt!: Date;
 }
 
+export class ShipmentLocationPointResponseDto {
+  id!: number;
+  shipmentId!: number;
+  campaignId!: number;
+  lat!: number;
+  lng!: number;
+  speed?: number;
+  heading?: number;
+  recordedAt!: Date;
+  updatedBy!: number;
+  createdAt!: Date;
+}
+
+export class ShipmentLocationHistoryResponseDto {
+  data!: ShipmentLocationPointResponseDto[];
+  meta!: {
+    total: number;
+    limit: number;
+  };
+}
+
 export class PaginatedShipmentsDto {
   data!: ShipmentResponseDto[];
   meta!: {

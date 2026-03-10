@@ -10,11 +10,14 @@ import { AssignShipmentVolunteerDto } from './dto/assign-shipment-volunteer.dto'
 import { CreatePickupPointDto } from './dto/create-pickup-point.dto';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { FindPickupPointsQueryDto } from './dto/find-pickup-points-query.dto';
+import { FindShipmentLocationHistoryQueryDto } from './dto/find-shipment-location-history-query.dto';
 import { FindShipmentsQueryDto } from './dto/find-shipments-query.dto';
 import {
   PaginatedPickupPointsDto,
   PaginatedShipmentsDto,
   PickupPointResponseDto,
+  ShipmentLocationHistoryResponseDto,
+  ShipmentLocationPointResponseDto,
   ShipmentResponseDto,
 } from './dto/logistics-response.dto';
 import { UpdatePickupPointDto } from './dto/update-pickup-point.dto';
@@ -292,6 +295,52 @@ export class LogisticsService {
     return row;
   }
 
+  async findShipmentLatestLocation(
+    shipmentId: number,
+  ): Promise<ShipmentLocationPointResponseDto | null> {
+    await this.ensureShipmentExists(shipmentId);
+
+    const latest = await this.shipmentLocationsRepository.findOne({
+      where: { shipmentId },
+      order: { recordedAt: 'DESC', id: 'DESC' },
+    });
+
+    return latest ? this.toShipmentLocationResponse(latest) : null;
+  }
+
+  async findShipmentLocationHistory(
+    shipmentId: number,
+    query: FindShipmentLocationHistoryQueryDto,
+  ): Promise<ShipmentLocationHistoryResponseDto> {
+    await this.ensureShipmentExists(shipmentId);
+
+    const limit = query.limit ?? 100;
+    const qb = this.shipmentLocationsRepository
+      .createQueryBuilder('location')
+      .where('location.shipmentId = :shipmentId', { shipmentId });
+
+    if (query.before) {
+      const beforeDate = new Date(query.before);
+      if (!Number.isNaN(beforeDate.getTime())) {
+        qb.andWhere('location.recordedAt < :beforeDate', { beforeDate });
+      }
+    }
+
+    qb.orderBy('location.recordedAt', 'DESC');
+    qb.addOrderBy('location.id', 'DESC');
+    qb.take(limit);
+
+    const [rows, total] = await qb.getManyAndCount();
+
+    return {
+      data: rows.map((row) => this.toShipmentLocationResponse(row)),
+      meta: {
+        total,
+        limit,
+      },
+    };
+  }
+
   private async ensurePickupPointExists(pickupPointId: number): Promise<void> {
     const pickupPoint = await this.pickupPointsRepository.findOne({
       where: { id: pickupPointId },
@@ -302,6 +351,17 @@ export class LogisticsService {
       throw new NotFoundException(
         `Pickup point with id ${pickupPointId} was not found`,
       );
+    }
+  }
+
+  private async ensureShipmentExists(shipmentId: number): Promise<void> {
+    const shipment = await this.shipmentsRepository.findOne({
+      where: { id: shipmentId },
+      select: { id: true },
+    });
+
+    if (!shipment) {
+      throw new NotFoundException(`Shipment with id ${shipmentId} was not found`);
     }
   }
 
@@ -340,6 +400,23 @@ export class LogisticsService {
       assignedVolunteerId: shipment.assignedVolunteerId,
       status: shipment.status,
       createdAt: shipment.createdAt,
+    };
+  }
+
+  private toShipmentLocationResponse(
+    location: ShipmentLocationHistory,
+  ): ShipmentLocationPointResponseDto {
+    return {
+      id: location.id,
+      shipmentId: location.shipmentId,
+      campaignId: location.campaignId,
+      lat: location.lat,
+      lng: location.lng,
+      speed: location.speed ?? undefined,
+      heading: location.heading ?? undefined,
+      recordedAt: location.recordedAt,
+      updatedBy: location.updatedBy,
+      createdAt: location.createdAt,
     };
   }
 }

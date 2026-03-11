@@ -1,6 +1,7 @@
 type EnvConfig = {
   PORT: number;
-  DB_HOST: string;
+  DATABASE_URL?: string;
+  DB_HOST?: string;
   DB_PORT: number;
   DB_USERNAME: string;
   DB_PASSWORD: string;
@@ -42,9 +43,25 @@ function getNumber(
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvConfig {
+  const databaseUrl =
+    typeof config.DATABASE_URL === 'string' &&
+    config.DATABASE_URL.trim().length > 0
+      ? config.DATABASE_URL
+      : undefined;
+
+  // Allow either a full DATABASE_URL or the discrete DB_* variables.
+  if (!databaseUrl) {
+    getRequiredString(config, 'DB_HOST');
+    getRequiredString(config, 'DB_USERNAME');
+    getRequiredString(config, 'DB_PASSWORD');
+    getRequiredString(config, 'DB_NAME');
+  }
+
   return {
     PORT: getNumber(config, 'PORT', 3000),
-    DB_HOST: getRequiredString(config, 'DB_HOST'),
+    DATABASE_URL: databaseUrl,
+    DB_HOST:
+      typeof config.DB_HOST === 'string' ? config.DB_HOST : undefined,
     DB_PORT: getNumber(config, 'DB_PORT', 5432),
     DB_USERNAME: getRequiredString(config, 'DB_USERNAME'),
     DB_PASSWORD: getRequiredString(config, 'DB_PASSWORD'),

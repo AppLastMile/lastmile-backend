@@ -26,4 +26,7 @@ export class CreateCampaignDto {
 
   @IsInt()
   eventId!: number;
+
+  @IsInt()
+  createdBy!: number;
 }

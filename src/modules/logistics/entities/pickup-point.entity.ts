@@ -19,6 +19,9 @@ export class PickupPoint {
   @Column({ length: 180 })
   address!: string;
 
+  @Column({ type: 'int', nullable: true })
+  eventId!: number | null;
+
   @Column({ type: 'double precision' })
   latitude!: number;
 

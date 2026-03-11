@@ -1,4 +1,4 @@
-import { IsInt, IsString, Min, MinLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 
 export class CreateItemDonationDto {
   @IsInt()
@@ -9,9 +9,13 @@ export class CreateItemDonationDto {
 
   @IsString()
   @MinLength(2)
-  itemName!: string;
+  itemType!: string;
 
   @IsInt()
   @Min(1)
   quantity!: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }

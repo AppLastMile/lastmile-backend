@@ -13,6 +13,7 @@ import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { DonationsModule } from './modules/donations/donations.module';
 import { LogisticsModule } from './modules/logistics/logistics.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { AuctionsModule } from './modules/auctions/auctions.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { ChatModule } from './modules/chat/chat.module';
     DonationsModule,
     LogisticsModule,
     ChatModule,
+    AuctionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

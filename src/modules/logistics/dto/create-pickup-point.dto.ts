@@ -1,4 +1,10 @@
-import { IsNumber, IsString, MinLength } from 'class-validator';
+import {
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 
 export class CreatePickupPointDto {
   @IsString()
@@ -11,9 +17,15 @@ export class CreatePickupPointDto {
   @IsString()
   address!: string;
 
+  @IsOptional()
   @IsNumber()
-  latitude!: number;
+  latitude?: number;
 
+  @IsOptional()
   @IsNumber()
-  longitude!: number;
+  longitude?: number;
+
+  @IsOptional()
+  @IsInt()
+  eventId?: number;
 }

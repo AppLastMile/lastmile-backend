@@ -19,7 +19,7 @@ export class PickupPoint {
   @Column({ length: 180 })
   address!: string;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', default: 0, nullable: true })
   eventId!: number;
 
   @Column({ type: 'double precision', nullable: true })

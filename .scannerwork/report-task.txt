@@ -1,0 +1,6 @@
+projectKey=LastMile-BackEnd
+serverUrl=http://localhost:9000
+serverVersion=26.3.0.120487
+dashboardUrl=http://localhost:9000/dashboard?id=LastMile-BackEnd
+ceTaskId=f90f8540-7bcd-4082-98ce-6aad07562a07
+ceTaskUrl=http://localhost:9000/api/ce/task?id=f90f8540-7bcd-4082-98ce-6aad07562a07

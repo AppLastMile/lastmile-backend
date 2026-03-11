@@ -57,6 +57,23 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+## SonarQube (backend)
+
+This repository includes a base SonarQube configuration in `sonar-project.properties`.
+
+1. Make sure your SonarQube server is running at `http://localhost:9000`.
+2. Create a project in SonarQube with key `lastmile-backend` (or update the key in the properties file).
+3. Generate a user token in SonarQube.
+4. In PowerShell, run:
+
+```powershell
+$env:SONAR_TOKEN="<your_token>"
+npm run sonar:prep
+npm run sonar:scan -- -Dsonar.token=$env:SONAR_TOKEN
+```
+
+If `sonar-scanner` is not installed, install SonarScanner CLI and ensure it is available in `PATH`.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

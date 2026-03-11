@@ -5,6 +5,7 @@ export function getTypeOrmConfig(
   configService: ConfigService,
 ): TypeOrmModuleOptions {
   const isProduction = process.env.NODE_ENV === 'production';
+  const databaseUrl = configService.get<string>('DATABASE_URL');
 
   return {
     type: 'postgres',

@@ -24,9 +24,6 @@ export class Shipment {
   pickupPointId!: number;
 
   @Column({ type: 'int', nullable: true })
-  eventId!: number | null;
-
-  @Column({ type: 'int', nullable: true })
   assignedVolunteerId!: number | null;
 
   @Column({

@@ -26,6 +26,9 @@ export class DonationItem {
   @Column({ length: 120 })
   itemName!: string;
 
+  @Column({ type: 'text', nullable: true })
+  notes!: string | null;
+
   @Column({ type: 'int' })
   quantity!: number;
 

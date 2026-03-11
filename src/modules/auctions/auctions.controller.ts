@@ -1,48 +1,43 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { AuctionsService } from './auctions.service';
+import { BuyAuctionDto } from './dto/buy-auction.dto';
+import { BuyAuctionResponseDto, PaginatedAuctionsDto, AuctionResponseDto } from './dto/auction-response.dto';
+import { CreateAuctionDto } from './dto/create-auction.dto';
+import { FindCampaignAuctionsQueryDto } from './dto/find-campaign-auctions-query.dto';
 
 @Controller()
 export class AuctionsController {
   constructor(private readonly auctionsService: AuctionsService) {}
 
-  @Get('campaigns/:campaignId/auctions')
-  listByCampaign(
+  @Post('campaigns/:campaignId/auctions')
+  createAuction(
     @Param('campaignId', ParseIntPipe) campaignId: number,
-    @Query('status') status = 'all',
-    @Query('page') page = '1',
-    @Query('limit') limit = '100',
-  ) {
-    const normalizedStatus =
-      status === 'active' || status === 'sold' || status === 'all' ? status : 'all';
-
-    return this.auctionsService.listByCampaign(
-      campaignId,
-      normalizedStatus,
-      Number(page),
-      Number(limit),
-    );
+    @Body() dto: CreateAuctionDto,
+  ): Promise<AuctionResponseDto> {
+    return this.auctionsService.createAuction(campaignId, dto);
   }
 
-  @Post('campaigns/:campaignId/auctions')
-  create(
+  @Get('campaigns/:campaignId/auctions')
+  getCampaignAuctions(
     @Param('campaignId', ParseIntPipe) campaignId: number,
-    @Body()
-    body: {
-      sellerId: number;
-      itemName: string;
-      description?: string;
-      price: number;
-      currency?: string;
-    },
-  ) {
-    return this.auctionsService.create(campaignId, body);
+    @Query() query: FindCampaignAuctionsQueryDto,
+  ): Promise<PaginatedAuctionsDto> {
+    return this.auctionsService.getCampaignAuctions(campaignId, query);
   }
 
   @Post('auctions/:auctionId/buy')
-  buy(
+  buyAuction(
     @Param('auctionId', ParseIntPipe) auctionId: number,
-    @Body() body: { buyerId: number; idempotencyKey?: string },
-  ) {
-    return this.auctionsService.buy(auctionId, body.buyerId);
+    @Body() dto: BuyAuctionDto,
+  ): Promise<BuyAuctionResponseDto> {
+    return this.auctionsService.buyAuction(auctionId, dto);
   }
 }

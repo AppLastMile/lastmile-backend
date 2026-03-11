@@ -4,7 +4,7 @@ import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 export function getTypeOrmConfig(
   configService: ConfigService,
 ): TypeOrmModuleOptions {
-  const databaseUrl = configService.get<string>('DATABASE_URL');
+  const isProduction = process.env.NODE_ENV === 'production';
 
   return {
     type: 'postgres',
@@ -18,9 +18,6 @@ export function getTypeOrmConfig(
           database: configService.getOrThrow<string>('DB_NAME'),
         }),
     autoLoadEntities: true,
-    synchronize: false,
-    extra: {
-      family: 4,
-    },
+    synchronize: !isProduction,
   };
 }

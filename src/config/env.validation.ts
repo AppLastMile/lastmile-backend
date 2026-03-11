@@ -3,9 +3,10 @@ type EnvConfig = {
   DATABASE_URL?: string;
   DB_HOST?: string;
   DB_PORT: number;
-  DB_USERNAME?: string;
-  DB_PASSWORD?: string;
-  DB_NAME?: string;
+  DB_USERNAME: string;
+  DB_PASSWORD: string;
+  DB_NAME: string;
+  JWT_SECRET: string;
 };
 
 function getRequiredString(
@@ -62,11 +63,9 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
     DB_HOST:
       typeof config.DB_HOST === 'string' ? config.DB_HOST : undefined,
     DB_PORT: getNumber(config, 'DB_PORT', 5432),
-    DB_USERNAME:
-      typeof config.DB_USERNAME === 'string' ? config.DB_USERNAME : undefined,
-    DB_PASSWORD:
-      typeof config.DB_PASSWORD === 'string' ? config.DB_PASSWORD : undefined,
-    DB_NAME:
-      typeof config.DB_NAME === 'string' ? config.DB_NAME : undefined,
+    DB_USERNAME: getRequiredString(config, 'DB_USERNAME'),
+    DB_PASSWORD: getRequiredString(config, 'DB_PASSWORD'),
+    DB_NAME: getRequiredString(config, 'DB_NAME'),
+    JWT_SECRET: getRequiredString(config, 'JWT_SECRET'),
   };
 }

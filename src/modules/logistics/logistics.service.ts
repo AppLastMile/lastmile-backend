@@ -1,203 +1,422 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThanOrEqual, Repository } from 'typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Repository } from 'typeorm';
+import { ShipmentAssignedEvent } from '../../events/shipment-assigned.event';
+import { ShipmentDeliveredEvent } from '../../events/shipment-delivered.event';
+import { ShipmentLocationChangedEvent } from '../../events/shipment-location-changed.event';
+import { ShipmentStatusChangedEvent } from '../../events/shipment-status-changed.event';
+import { AssignShipmentVolunteerDto } from './dto/assign-shipment-volunteer.dto';
 import { CreatePickupPointDto } from './dto/create-pickup-point.dto';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
+import { FindPickupPointsQueryDto } from './dto/find-pickup-points-query.dto';
+import { FindShipmentLocationHistoryQueryDto } from './dto/find-shipment-location-history-query.dto';
+import { FindShipmentsQueryDto } from './dto/find-shipments-query.dto';
+import {
+  PaginatedPickupPointsDto,
+  PaginatedShipmentsDto,
+  PickupPointResponseDto,
+  ShipmentLocationHistoryResponseDto,
+  ShipmentLocationPointResponseDto,
+  ShipmentResponseDto,
+} from './dto/logistics-response.dto';
+import { UpdatePickupPointDto } from './dto/update-pickup-point.dto';
+import { UpdateShipmentStatusDto } from './dto/update-shipment-status.dto';
 import { PickupPoint } from './entities/pickup-point.entity';
+import { ShipmentLocationHistory } from './entities/shipment-location-history.entity';
 import { Shipment, ShipmentStatus } from './entities/shipment.entity';
-import { ShipmentLocation } from './entities/shipment-location.entity';
-import { Campaign } from '../campaigns/entities/campaign.entity';
 
 @Injectable()
 export class LogisticsService {
-	constructor(
-		@InjectRepository(PickupPoint)
-		private readonly pickupPointsRepository: Repository<PickupPoint>,
-		@InjectRepository(Shipment)
-		private readonly shipmentsRepository: Repository<Shipment>,
-		@InjectRepository(ShipmentLocation)
-		private readonly shipmentLocationsRepository: Repository<ShipmentLocation>,
-		@InjectRepository(Campaign)
-		private readonly campaignsRepository: Repository<Campaign>,
-	) {}
+  constructor(
+    @InjectRepository(PickupPoint)
+    private readonly pickupPointsRepository: Repository<PickupPoint>,
+    @InjectRepository(Shipment)
+    private readonly shipmentsRepository: Repository<Shipment>,
+    @InjectRepository(ShipmentLocationHistory)
+    private readonly shipmentLocationsRepository: Repository<ShipmentLocationHistory>,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
-	async listPickupPoints(page = 1, limit = 100) {
-		const safePage = Number.isFinite(page) && page > 0 ? page : 1;
-		const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : 100;
+  async createPickupPoint(
+    dto: CreatePickupPointDto,
+  ): Promise<PickupPointResponseDto> {
+    const pickupPoint = this.pickupPointsRepository.create(dto);
+    const savedPickupPoint =
+      await this.pickupPointsRepository.save(pickupPoint);
 
-		const [data, total] = await this.pickupPointsRepository.findAndCount({
-			order: { id: 'DESC' },
-			skip: (safePage - 1) * safeLimit,
-			take: safeLimit,
-		});
+    return this.toPickupPointResponse(savedPickupPoint);
+  }
 
-		return {
-			data: data.map((point) => ({ ...point, eventId: null })),
-			meta: {
-				total,
-				page: safePage,
-				limit: safeLimit,
-				totalPages: Math.max(1, Math.ceil(total / safeLimit)),
-			},
-		};
-	}
+  async findPickupPoints(
+    query: FindPickupPointsQueryDto,
+  ): Promise<PaginatedPickupPointsDto> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
 
-	async createPickupPoint(dto: CreatePickupPointDto) {
-		const pickupPoint = this.pickupPointsRepository.create({
-			name: dto.name,
-			city: dto.city,
-			address: dto.address,
-			eventId: dto.eventId ?? null,
-			latitude: dto.latitude ?? 0,
-			longitude: dto.longitude ?? 0,
-		});
+    const qb = this.pickupPointsRepository.createQueryBuilder('pickupPoint');
+    qb.orderBy('pickupPoint.createdAt', 'DESC');
+    qb.skip((page - 1) * limit);
+    qb.take(limit);
 
-		return this.pickupPointsRepository.save(pickupPoint);
-	}
+    const [pickupPoints, total] = await qb.getManyAndCount();
 
-	async listShipments(page = 1, limit = 100) {
-		const safePage = Number.isFinite(page) && page > 0 ? page : 1;
-		const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : 100;
+    return {
+      data: pickupPoints.map((pickupPoint) =>
+        this.toPickupPointResponse(pickupPoint),
+      ),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
+  }
 
-		const [data, total] = await this.shipmentsRepository.findAndCount({
-			order: { id: 'DESC' },
-			skip: (safePage - 1) * safeLimit,
-			take: safeLimit,
-		});
+  async findPickupPointById(id: number): Promise<PickupPointResponseDto> {
+    const pickupPoint = await this.pickupPointsRepository.findOne({
+      where: { id },
+    });
+    if (!pickupPoint) {
+      throw new NotFoundException(`Pickup point with id ${id} was not found`);
+    }
 
-		return {
-			data,
-			meta: {
-				total,
-				page: safePage,
-				limit: safeLimit,
-				totalPages: Math.max(1, Math.ceil(total / safeLimit)),
-			},
-		};
-	}
+    return this.toPickupPointResponse(pickupPoint);
+  }
 
-	async createShipment(dto: CreateShipmentDto) {
-		const campaign = await this.campaignsRepository.findOne({
-			where: { id: dto.campaignId },
-		});
+  async updatePickupPoint(
+    id: number,
+    dto: UpdatePickupPointDto,
+  ): Promise<PickupPointResponseDto> {
+    const pickupPoint = await this.pickupPointsRepository.findOne({
+      where: { id },
+    });
+    if (!pickupPoint) {
+      throw new NotFoundException(`Pickup point with id ${id} was not found`);
+    }
 
-		const shipment = this.shipmentsRepository.create({
-			campaignId: dto.campaignId,
-			pickupPointId: dto.pickupPointId,
-			eventId: campaign?.eventId ?? null,
-			assignedVolunteerId: dto.assignedVolunteerId ?? null,
-			status: dto.assignedVolunteerId
-				? ShipmentStatus.ASSIGNED
-				: ShipmentStatus.PENDING,
-		});
+    const updatedPickupPoint = await this.pickupPointsRepository.save({
+      ...pickupPoint,
+      ...dto,
+    });
 
-		const saved = await this.shipmentsRepository.save(shipment);
+    return this.toPickupPointResponse(updatedPickupPoint);
+  }
 
-		const pickupPoint = await this.pickupPointsRepository.findOne({
-			where: { id: saved.pickupPointId },
-		});
+  async createShipment(dto: CreateShipmentDto): Promise<ShipmentResponseDto> {
+    await this.ensurePickupPointExists(dto.pickupPointId);
 
-		if (pickupPoint) {
-			await this.shipmentLocationsRepository.save(
-				this.shipmentLocationsRepository.create({
-					shipmentId: saved.id,
-					lat: pickupPoint.latitude,
-					lng: pickupPoint.longitude,
-					speed: 0,
-					heading: 0,
-				}),
-			);
-		}
+    const nextStatus = dto.assignedVolunteerId
+      ? ShipmentStatus.ASSIGNED
+      : ShipmentStatus.PENDING;
 
-		return saved;
-	}
+    const shipment = this.shipmentsRepository.create({
+      campaignId: dto.campaignId,
+      pickupPointId: dto.pickupPointId,
+      assignedVolunteerId: dto.assignedVolunteerId ?? null,
+      status: nextStatus,
+    });
 
-	async assignVolunteer(shipmentId: number, volunteerId: number) {
-		const shipment = await this.shipmentsRepository.findOne({
-			where: { id: shipmentId },
-		});
+    const savedShipment = await this.shipmentsRepository.save(shipment);
 
-		if (!shipment) {
-			return { message: 'Shipment not found' };
-		}
+    if (savedShipment.assignedVolunteerId) {
+      this.emitShipmentAssignedEvent(savedShipment);
+    }
 
-		shipment.assignedVolunteerId = volunteerId;
-		shipment.status = ShipmentStatus.ASSIGNED;
-		return this.shipmentsRepository.save(shipment);
-	}
+    return this.toShipmentResponse(savedShipment);
+  }
 
-	async getLatestLocation(shipmentId: number) {
-		const latest = await this.shipmentLocationsRepository.findOne({
-			where: { shipmentId },
-			order: { recordedAt: 'DESC', id: 'DESC' },
-		});
+  async findShipments(
+    query: FindShipmentsQueryDto,
+  ): Promise<PaginatedShipmentsDto> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
 
-		if (latest) {
-			return {
-				shipmentId: latest.shipmentId,
-				lat: latest.lat,
-				lng: latest.lng,
-				speed: latest.speed,
-				heading: latest.heading,
-				recordedAt: latest.recordedAt.toISOString(),
-			};
-		}
+    const qb = this.shipmentsRepository.createQueryBuilder('shipment');
 
-		const shipment = await this.shipmentsRepository.findOne({
-			where: { id: shipmentId },
-		});
+    if (query.campaignId) {
+      qb.andWhere('shipment.campaignId = :campaignId', {
+        campaignId: query.campaignId,
+      });
+    }
 
-		const pickupPoint = shipment
-			? await this.pickupPointsRepository.findOne({
-					where: { id: shipment.pickupPointId },
-				})
-			: null;
+    if (query.pickupPointId) {
+      qb.andWhere('shipment.pickupPointId = :pickupPointId', {
+        pickupPointId: query.pickupPointId,
+      });
+    }
 
-		const fallback = this.shipmentLocationsRepository.create({
-			shipmentId,
-			lat: pickupPoint?.latitude ?? 0,
-			lng: pickupPoint?.longitude ?? 0,
-			speed: 0,
-			heading: 0,
-		});
+    if (query.assignedVolunteerId) {
+      qb.andWhere('shipment.assignedVolunteerId = :assignedVolunteerId', {
+        assignedVolunteerId: query.assignedVolunteerId,
+      });
+    }
 
-		const saved = await this.shipmentLocationsRepository.save(fallback);
-		return {
-			shipmentId: saved.shipmentId,
-			lat: saved.lat,
-			lng: saved.lng,
-			speed: saved.speed,
-			heading: saved.heading,
-			recordedAt: saved.recordedAt.toISOString(),
-		};
-	}
+    if (query.status) {
+      qb.andWhere('shipment.status = :status', { status: query.status });
+    }
 
-	async getLocationHistory(shipmentId: number, limit = 100, before?: string) {
-		const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : 100;
-		const beforeDate = before ? new Date(before) : null;
+    qb.orderBy('shipment.createdAt', 'DESC');
+    qb.skip((page - 1) * limit);
+    qb.take(limit);
 
-		const where = beforeDate
-			? { shipmentId, recordedAt: LessThanOrEqual(beforeDate) }
-			: { shipmentId };
+    const [shipments, total] = await qb.getManyAndCount();
 
-		const rows = await this.shipmentLocationsRepository.find({
-			where,
-			order: { recordedAt: 'DESC', id: 'DESC' },
-			take: safeLimit,
-		});
+    return {
+      data: shipments.map((shipment) => this.toShipmentResponse(shipment)),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
+  }
 
-		if (rows.length === 0) {
-			const latest = await this.getLatestLocation(shipmentId);
-			return [latest];
-		}
+  async findShipmentById(id: number): Promise<ShipmentResponseDto> {
+    const shipment = await this.shipmentsRepository.findOne({ where: { id } });
+    if (!shipment) {
+      throw new NotFoundException(`Shipment with id ${id} was not found`);
+    }
 
-		return rows.map((row) => ({
-			shipmentId: row.shipmentId,
-			lat: row.lat,
-			lng: row.lng,
-			speed: row.speed,
-			heading: row.heading,
-			recordedAt: row.recordedAt.toISOString(),
-		}));
-	}
+    return this.toShipmentResponse(shipment);
+  }
+
+  async assignVolunteer(
+    id: number,
+    dto: AssignShipmentVolunteerDto,
+  ): Promise<ShipmentResponseDto> {
+    const shipment = await this.shipmentsRepository.findOne({ where: { id } });
+    if (!shipment) {
+      throw new NotFoundException(`Shipment with id ${id} was not found`);
+    }
+
+    const nextStatus =
+      shipment.status === ShipmentStatus.PENDING
+        ? ShipmentStatus.ASSIGNED
+        : shipment.status;
+
+    const updatedShipment = await this.shipmentsRepository.save({
+      ...shipment,
+      assignedVolunteerId: dto.volunteerId,
+      status: nextStatus,
+    });
+
+    this.emitShipmentAssignedEvent(updatedShipment);
+
+    return this.toShipmentResponse(updatedShipment);
+  }
+
+  async updateShipmentStatus(
+    id: number,
+    dto: UpdateShipmentStatusDto,
+  ): Promise<ShipmentResponseDto> {
+    const shipment = await this.shipmentsRepository.findOne({ where: { id } });
+    if (!shipment) {
+      throw new NotFoundException(`Shipment with id ${id} was not found`);
+    }
+
+    const previousStatus = shipment.status;
+
+    const updatedShipment = await this.shipmentsRepository.save({
+      ...shipment,
+      status: dto.status,
+    });
+
+    if (previousStatus !== updatedShipment.status) {
+      const statusChangedPayload: ShipmentStatusChangedEvent = {
+        shipmentId: updatedShipment.id,
+        campaignId: updatedShipment.campaignId,
+        previousStatus,
+        status: updatedShipment.status,
+        updatedBy: updatedShipment.assignedVolunteerId ?? 0,
+        updatedAt: new Date(),
+      };
+      this.eventEmitter.emit('shipment.status.changed', statusChangedPayload);
+    }
+
+    if (dto.status === ShipmentStatus.DELIVERED) {
+      const eventPayload: ShipmentDeliveredEvent = {
+        shipmentId: updatedShipment.id,
+        campaignId: updatedShipment.campaignId,
+        deliveredAt: new Date(),
+      };
+      this.eventEmitter.emit('shipment.delivered', eventPayload);
+    }
+
+    return this.toShipmentResponse(updatedShipment);
+  }
+
+  async createShipmentLocationUpdate(params: {
+    shipmentId: number;
+    lat: number;
+    lng: number;
+    speed?: number | null;
+    heading?: number | null;
+    recordedAt?: Date;
+    updatedBy: number;
+  }): Promise<ShipmentLocationHistory> {
+    const shipment = await this.shipmentsRepository.findOne({
+      where: { id: params.shipmentId },
+    });
+
+    if (!shipment) {
+      throw new NotFoundException(
+        `Shipment with id ${params.shipmentId} was not found`,
+      );
+    }
+
+    const row = await this.shipmentLocationsRepository.save(
+      this.shipmentLocationsRepository.create({
+        shipmentId: shipment.id,
+        campaignId: shipment.campaignId,
+        lat: params.lat,
+        lng: params.lng,
+        speed: params.speed ?? null,
+        heading: params.heading ?? null,
+        recordedAt: params.recordedAt ?? new Date(),
+        updatedBy: params.updatedBy,
+      }),
+    );
+
+    const locationChangedPayload: ShipmentLocationChangedEvent = {
+      shipmentId: row.shipmentId,
+      campaignId: row.campaignId,
+      lat: row.lat,
+      lng: row.lng,
+      speed: row.speed,
+      heading: row.heading,
+      recordedAt: row.recordedAt,
+      updatedBy: row.updatedBy,
+    };
+    this.eventEmitter.emit('shipment.location.changed', locationChangedPayload);
+
+    return row;
+  }
+
+  async findShipmentLatestLocation(
+    shipmentId: number,
+  ): Promise<ShipmentLocationPointResponseDto | null> {
+    await this.ensureShipmentExists(shipmentId);
+
+    const latest = await this.shipmentLocationsRepository.findOne({
+      where: { shipmentId },
+      order: { recordedAt: 'DESC', id: 'DESC' },
+    });
+
+    return latest ? this.toShipmentLocationResponse(latest) : null;
+  }
+
+  async findShipmentLocationHistory(
+    shipmentId: number,
+    query: FindShipmentLocationHistoryQueryDto,
+  ): Promise<ShipmentLocationHistoryResponseDto> {
+    await this.ensureShipmentExists(shipmentId);
+
+    const limit = query.limit ?? 100;
+    const qb = this.shipmentLocationsRepository
+      .createQueryBuilder('location')
+      .where('location.shipmentId = :shipmentId', { shipmentId });
+
+    if (query.before) {
+      const beforeDate = new Date(query.before);
+      if (!Number.isNaN(beforeDate.getTime())) {
+        qb.andWhere('location.recordedAt < :beforeDate', { beforeDate });
+      }
+    }
+
+    qb.orderBy('location.recordedAt', 'DESC');
+    qb.addOrderBy('location.id', 'DESC');
+    qb.take(limit);
+
+    const [rows, total] = await qb.getManyAndCount();
+
+    return {
+      data: rows.map((row) => this.toShipmentLocationResponse(row)),
+      meta: {
+        total,
+        limit,
+      },
+    };
+  }
+
+  private async ensurePickupPointExists(pickupPointId: number): Promise<void> {
+    const pickupPoint = await this.pickupPointsRepository.findOne({
+      where: { id: pickupPointId },
+      select: { id: true },
+    });
+
+    if (!pickupPoint) {
+      throw new NotFoundException(
+        `Pickup point with id ${pickupPointId} was not found`,
+      );
+    }
+  }
+
+  private async ensureShipmentExists(shipmentId: number): Promise<void> {
+    const shipment = await this.shipmentsRepository.findOne({
+      where: { id: shipmentId },
+      select: { id: true },
+    });
+
+    if (!shipment) {
+      throw new NotFoundException(`Shipment with id ${shipmentId} was not found`);
+    }
+  }
+
+  private emitShipmentAssignedEvent(shipment: Shipment): void {
+    if (!shipment.assignedVolunteerId) {
+      return;
+    }
+
+    const eventPayload: ShipmentAssignedEvent = {
+      shipmentId: shipment.id,
+      campaignId: shipment.campaignId,
+      volunteerId: shipment.assignedVolunteerId,
+    };
+    this.eventEmitter.emit('shipment.assigned', eventPayload);
+  }
+
+  private toPickupPointResponse(
+    pickupPoint: PickupPoint,
+  ): PickupPointResponseDto {
+    return {
+      id: pickupPoint.id,
+      name: pickupPoint.name,
+      city: pickupPoint.city,
+      address: pickupPoint.address,
+      eventId: pickupPoint.eventId,
+      latitude: pickupPoint.latitude ?? undefined,
+      longitude: pickupPoint.longitude ?? undefined,
+    };
+  }
+
+  private toShipmentResponse(shipment: Shipment): ShipmentResponseDto {
+    return {
+      id: shipment.id,
+      campaignId: shipment.campaignId,
+      pickupPointId: shipment.pickupPointId,
+      assignedVolunteerId: shipment.assignedVolunteerId,
+      status: shipment.status,
+      createdAt: shipment.createdAt,
+    };
+  }
+
+  private toShipmentLocationResponse(
+    location: ShipmentLocationHistory,
+  ): ShipmentLocationPointResponseDto {
+    return {
+      id: location.id,
+      shipmentId: location.shipmentId,
+      campaignId: location.campaignId,
+      lat: location.lat,
+      lng: location.lng,
+      speed: location.speed ?? undefined,
+      heading: location.heading ?? undefined,
+      recordedAt: location.recordedAt,
+      updatedBy: location.updatedBy,
+      createdAt: location.createdAt,
+    };
+  }
 }

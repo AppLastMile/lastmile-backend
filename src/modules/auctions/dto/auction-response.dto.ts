@@ -2,14 +2,19 @@ import { AuctionStatus } from '../entities/auction.entity';
 
 export class AuctionResponseDto {
   id!: number;
-  campaignId!: number;
+  productId!: number;
+  campaignId!: number | null;
   sellerId!: number;
   itemName!: string;
   description!: string | null;
-  price!: number;
+  initialPrice!: number;
+  currentPrice!: number | null;
   currency!: string;
+  durationMinutes!: number;
   status!: AuctionStatus;
   buyerId!: number | null;
+  startedAt!: Date | null;
+  endAt!: Date | null;
   createdAt!: Date;
   soldAt!: Date | null;
   version!: number;
@@ -27,7 +32,8 @@ export class PaginatedAuctionsDto {
 
 export class BuyAuctionResponseDto {
   id!: number;
-  campaignId!: number;
+  productId!: number;
+  campaignId!: number | null;
   status!: AuctionStatus;
   buyerId!: number;
   soldAt!: Date;

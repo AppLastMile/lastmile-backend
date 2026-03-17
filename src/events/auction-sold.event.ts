@@ -1,6 +1,7 @@
 export interface AuctionSoldEvent {
   auctionId: number;
-  campaignId: number;
+  productId: number;
+  campaignId: number | null;
   buyerId: number;
   soldAt: Date;
   price: number;

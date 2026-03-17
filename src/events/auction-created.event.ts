@@ -1,6 +1,7 @@
 export interface AuctionCreatedEvent {
   auctionId: number;
-  campaignId: number;
+  productId: number;
+  campaignId: number | null;
   sellerId: number;
   price: number;
   currency: string;

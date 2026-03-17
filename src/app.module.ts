@@ -14,6 +14,7 @@ import { DonationsModule } from './modules/donations/donations.module';
 import { LogisticsModule } from './modules/logistics/logistics.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { AuctionsModule } from './modules/auctions/auctions.module';
+import { ProductsModule } from './modules/products/products.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 
 @Module({
@@ -33,6 +34,7 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
     CampaignsModule,
     DonationsModule,
     AuctionsModule,
+    ProductsModule,
     LogisticsModule,
     ChatModule,
     RealtimeModule,

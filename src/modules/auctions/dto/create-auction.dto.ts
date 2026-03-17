@@ -2,25 +2,23 @@ import { IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-va
 
 export class CreateAuctionDto {
   @IsInt()
-  sellerId!: number;
-
-  @IsString()
-  @MinLength(2)
-  @MaxLength(150)
-  itemName!: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  description?: string;
+  productId!: number;
 
   @IsInt()
   @Min(1)
-  price!: number;
+  initialPrice!: number;
+
+  @IsInt()
+  @Min(1)
+  durationMinutes!: number;
 
   @IsOptional()
   @IsString()
   @MinLength(3)
   @MaxLength(3)
   currency?: string;
+
+  @IsOptional()
+  @IsInt()
+  campaignId?: number;
 }

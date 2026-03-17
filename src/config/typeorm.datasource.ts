@@ -8,6 +8,7 @@ const baseConfig = {
   type: 'postgres' as const,
   entities: ['src/modules/**/entities/*.entity.ts'],
   migrations: ['src/migrations/*.ts'],
+  migrationsTransactionMode: 'each' as const,
   extra: {
     family: 4,
   },

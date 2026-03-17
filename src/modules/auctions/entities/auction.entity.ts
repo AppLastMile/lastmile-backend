@@ -7,14 +7,16 @@ import {
 } from 'typeorm';
 
 export enum AuctionStatus {
+  CREATED = 'created',
   ACTIVE = 'active',
+  CLOSED = 'closed',
   SOLD = 'sold',
   CANCELLED = 'cancelled',
 }
 
 @Entity('auctions')
-@Index('idx_auctions_campaign_status_created_at', [
-  'campaignId',
+@Index('idx_auctions_product_status_created_at', [
+  'productId',
   'status',
   'createdAt',
 ])
@@ -23,7 +25,10 @@ export class Auction {
   id!: number;
 
   @Column()
-  campaignId!: number;
+  productId!: number;
+
+  @Column({ type: 'int', nullable: true })
+  campaignId!: number | null;
 
   @Column()
   sellerId!: number;
@@ -35,20 +40,32 @@ export class Auction {
   description!: string | null;
 
   @Column({ type: 'decimal', precision: 12, scale: 2 })
-  price!: number;
+  initialPrice!: number;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  currentPrice!: number | null;
 
   @Column({ length: 3, default: 'COP' })
   currency!: string;
 
+  @Column({ type: 'int' })
+  durationMinutes!: number;
+
   @Column({
     type: 'enum',
     enum: AuctionStatus,
-    default: AuctionStatus.ACTIVE,
+    default: AuctionStatus.CREATED,
   })
   status!: AuctionStatus;
 
   @Column({ type: 'int', nullable: true })
   buyerId!: number | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  startedAt!: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  endAt!: Date | null;
 
   @Column({ type: 'timestamptz', nullable: true })
   soldAt!: Date | null;

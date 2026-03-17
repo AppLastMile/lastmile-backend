@@ -5,10 +5,8 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const logger = new Logger('Bootstrap');
-  const globalPrefix = 'api/v1';
   const port = Number(process.env.PORT ?? 3000);
 
-  app.setGlobalPrefix(globalPrefix);
   app.enableCors();
   app.useGlobalPipes(
     new ValidationPipe({
@@ -27,6 +25,6 @@ async function bootstrap() {
     .replace('[::1]', 'localhost');
 
   logger.log(`Backend iniciado en: ${localhostUrl}`);
-  logger.log(`Abre esta URL para verificar: ${localhostUrl}/${globalPrefix}`);
+  logger.log(`Abre esta URL para verificar: ${localhostUrl}`);
 }
 bootstrap();

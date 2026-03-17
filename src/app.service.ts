@@ -1,8 +1,16 @@
 import { Injectable } from '@nestjs/common';
 
+type HealthCheckResponse = {
+  status: 'ok';
+  service: 'lastmile-backend';
+};
+
 @Injectable()
 export class AppService {
-  getHello(): string {
-    return 'Hello World!';
+  getHealthCheck(): HealthCheckResponse {
+    return {
+      status: 'ok',
+      service: 'lastmile-backend',
+    };
   }
 }

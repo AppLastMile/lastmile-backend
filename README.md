@@ -57,6 +57,30 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+## Continuous Integration (CI)
+
+This repository includes a GitHub Actions workflow for CI in `.github/workflows/ci.yml`.
+
+The workflow runs on:
+
+- `pull_request` to `main`
+- `push` to `main`
+- `push` to `develop`
+
+Checks included in CI v1:
+
+- Prettier check (`npm run format:check`)
+- ESLint check (`npm run lint:check`)
+- Build (`npm run build`)
+- Unit tests with coverage (`npm run test:cov`)
+
+Run the same checks locally:
+
+```bash
+$ npm ci
+$ npm run ci:check
+```
+
 ## SonarQube (backend)
 
 This repository includes a base SonarQube configuration in `sonar-project.properties`.

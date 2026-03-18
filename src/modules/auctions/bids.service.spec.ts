@@ -103,13 +103,11 @@ describe('AuctionsService — placeBid', () => {
     auctionFindOne = jest.fn();
     auctionUpdate = jest.fn().mockResolvedValue(undefined);
     bidCreate = jest.fn().mockImplementation((data) => data);
-    bidSave = jest
-      .fn()
-      .mockImplementation(async (b) => ({
-        ...b,
-        id: 10,
-        createdAt: new Date(),
-      }));
+    bidSave = jest.fn().mockImplementation(async (b) => ({
+      ...b,
+      id: 10,
+      createdAt: new Date(),
+    }));
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

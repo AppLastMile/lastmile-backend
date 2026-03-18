@@ -22,7 +22,9 @@ export class CreateBidsTable1773200000002 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_bids_auction_created_at"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_bids_auction_created_at"`,
+    );
     await queryRunner.query(`DROP TABLE "bids"`);
   }
 }

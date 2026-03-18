@@ -361,7 +361,9 @@ export class LogisticsService {
     });
 
     if (!shipment) {
-      throw new NotFoundException(`Shipment with id ${shipmentId} was not found`);
+      throw new NotFoundException(
+        `Shipment with id ${shipmentId} was not found`,
+      );
     }
   }
 

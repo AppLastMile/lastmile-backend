@@ -5,10 +5,10 @@ import { Message } from './entities/message.entity';
 
 @Controller('chat')
 export class ChatController {
-	constructor(private readonly chatService: ChatService) {}
+  constructor(private readonly chatService: ChatService) {}
 
-	@Post('messages')
-	createMessage(@Body() dto: CreateMessageDto): Promise<Message> {
-		return this.chatService.createMessage(dto);
-	}
+  @Post('messages')
+  createMessage(@Body() dto: CreateMessageDto): Promise<Message> {
+    return this.chatService.createMessage(dto);
+  }
 }

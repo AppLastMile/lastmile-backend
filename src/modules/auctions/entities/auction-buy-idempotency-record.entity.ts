@@ -1,9 +1,19 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 @Entity('auction_buy_idempotency_records')
-@Index('uq_auction_buy_idempotency', ['auctionId', 'buyerId', 'idempotencyKey'], {
-  unique: true,
-})
+@Index(
+  'uq_auction_buy_idempotency',
+  ['auctionId', 'buyerId', 'idempotencyKey'],
+  {
+    unique: true,
+  },
+)
 export class AuctionBuyIdempotencyRecord {
   @PrimaryGeneratedColumn()
   id!: number;

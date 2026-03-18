@@ -41,7 +41,9 @@ export class ProductsAndAuctionProductFk1773200000001 implements MigrationInterf
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_auctions_product_status_created_at"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_auctions_product_status_created_at"`,
+    );
     await queryRunner.query(`
       CREATE INDEX "idx_auctions_campaign_status_created_at"
       ON "auctions" ("campaignId", "status", "createdAt")

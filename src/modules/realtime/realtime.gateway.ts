@@ -98,7 +98,9 @@ export class RealtimeGateway
       socket.data.rateLimit = {};
       socket.data.isAuthenticated = true;
 
-      this.logger.log(`WS connected user=${authUser.userId} socket=${client.id}`);
+      this.logger.log(
+        `WS connected user=${authUser.userId} socket=${client.id}`,
+      );
     } catch (error) {
       const anonymousUser = this.resolveAnonymousUser(client);
       socket.data.userId = anonymousUser.userId;
@@ -128,13 +130,11 @@ export class RealtimeGateway
         throw new BadRequestException('room is required');
       }
 
-      const normalizedRoom = await this.roomAuthorizationService.validateAndNormalizeRoom(
-        room,
-        {
+      const normalizedRoom =
+        await this.roomAuthorizationService.validateAndNormalizeRoom(room, {
           userId: client.data.userId,
           role: client.data.role,
-        },
-      );
+        });
 
       await client.join(normalizedRoom);
       this.logger.log(
@@ -159,7 +159,11 @@ export class RealtimeGateway
   ): Promise<void> {
     const room = payload?.room?.trim();
     if (!room) {
-      this.emitSystemError(client, new BadRequestException('room is required'), 'BAD_REQUEST');
+      this.emitSystemError(
+        client,
+        new BadRequestException('room is required'),
+        'BAD_REQUEST',
+      );
       return;
     }
 
@@ -186,7 +190,9 @@ export class RealtimeGateway
       }
 
       if (!text || text.length < 1 || text.length > 500) {
-        throw new BadRequestException('message must have between 1 and 500 characters');
+        throw new BadRequestException(
+          'message must have between 1 and 500 characters',
+        );
       }
 
       await this.roomAuthorizationService.validateAndNormalizeRoom(
@@ -210,7 +216,8 @@ export class RealtimeGateway
         select: { id: true, name: true },
       });
 
-      const resolvedAuthor = author ?? (await this.ensureAnonymousAuthor(client));
+      const resolvedAuthor =
+        author ?? (await this.ensureAnonymousAuthor(client));
 
       const created = await this.messagesRepository.save(
         this.messagesRepository.create({
@@ -224,21 +231,26 @@ export class RealtimeGateway
         `chat.send ok user=${resolvedAuthor.id} campaign=${campaignId} messageId=${created.id}`,
       );
 
-      this.server.to(`campaign:${campaignId}:chat`).emit('chat.message.created', {
-        id: created.id,
-        campaignId,
-        authorId: resolvedAuthor.id,
-        authorName: resolvedAuthor.name,
-        message: created.message,
-        createdAt: created.createdAt.toISOString(),
-      });
+      this.server
+        .to(`campaign:${campaignId}:chat`)
+        .emit('chat.message.created', {
+          id: created.id,
+          campaignId,
+          authorId: resolvedAuthor.id,
+          authorName: resolvedAuthor.name,
+          message: created.message,
+          createdAt: created.createdAt.toISOString(),
+        });
     } catch (error) {
       this.logger.warn(
         `chat.send failed user=${client.data.userId} campaign=${payload?.campaignId ?? 'unknown'} reason=${error instanceof Error ? error.message : 'unknown'}`,
       );
       client.emit('chat.message.error', {
         campaignId: payload?.campaignId,
-        message: error instanceof Error ? error.message : 'No fue posible enviar el mensaje.',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'No fue posible enviar el mensaje.',
       });
     }
   }
@@ -275,7 +287,11 @@ export class RealtimeGateway
   ): Promise<void> {
     const shipmentId = Number(payload?.shipmentId);
     if (!Number.isInteger(shipmentId) || shipmentId <= 0) {
-      this.emitSystemError(client, new BadRequestException('shipmentId is invalid'), 'BAD_REQUEST');
+      this.emitSystemError(
+        client,
+        new BadRequestException('shipmentId is invalid'),
+        'BAD_REQUEST',
+      );
       return;
     }
 
@@ -362,7 +378,9 @@ export class RealtimeGateway
         throw new BadRequestException('Shipment does not exist');
       }
 
-      const recordedAt = payload?.recordedAt ? new Date(payload.recordedAt) : new Date();
+      const recordedAt = payload?.recordedAt
+        ? new Date(payload.recordedAt)
+        : new Date();
       if (Number.isNaN(recordedAt.getTime())) {
         throw new BadRequestException('recordedAt is invalid');
       }
@@ -372,7 +390,9 @@ export class RealtimeGateway
         campaignId: shipment.campaignId,
         lat,
         lng,
-        speed: Number.isFinite(Number(payload?.speed)) ? Number(payload?.speed) : null,
+        speed: Number.isFinite(Number(payload?.speed))
+          ? Number(payload?.speed)
+          : null,
         heading: Number.isFinite(Number(payload?.heading))
           ? Number(payload?.heading)
           : null,
@@ -382,14 +402,16 @@ export class RealtimeGateway
 
       await this.shipmentLocationsRepository.save(row);
 
-      this.server.to(`shipment:${shipmentId}:tracking`).emit('shipment.location.changed', {
-        shipmentId,
-        lat,
-        lng,
-        speed: row.speed,
-        heading: row.heading,
-        recordedAt: row.recordedAt.toISOString(),
-      });
+      this.server
+        .to(`shipment:${shipmentId}:tracking`)
+        .emit('shipment.location.changed', {
+          shipmentId,
+          lat,
+          lng,
+          speed: row.speed,
+          heading: row.heading,
+          recordedAt: row.recordedAt.toISOString(),
+        });
 
       client.emit('shipment.location.ack', {
         shipmentId,
@@ -411,7 +433,10 @@ export class RealtimeGateway
         throw new BadRequestException('shipmentId is invalid');
       }
 
-      if (!payload?.status || !Object.values(ShipmentStatus).includes(payload.status)) {
+      if (
+        !payload?.status ||
+        !Object.values(ShipmentStatus).includes(payload.status)
+      ) {
         throw new BadRequestException('status is invalid');
       }
 
@@ -439,13 +464,15 @@ export class RealtimeGateway
       shipment.status = payload.status;
       await this.shipmentsRepository.save(shipment);
 
-      this.server.to(`shipment:${shipmentId}:tracking`).emit('shipment.status.changed', {
-        shipmentId,
-        previousStatus,
-        status: shipment.status,
-        updatedBy: client.data.userId,
-        updatedAt: new Date().toISOString(),
-      });
+      this.server
+        .to(`shipment:${shipmentId}:tracking`)
+        .emit('shipment.status.changed', {
+          shipmentId,
+          previousStatus,
+          status: shipment.status,
+          updatedBy: client.data.userId,
+          updatedAt: new Date().toISOString(),
+        });
     } catch (error) {
       this.emitSystemError(client, error, 'SHIPMENT_STATUS_ERROR');
     }
@@ -466,81 +493,95 @@ export class RealtimeGateway
       select: { id: true, name: true },
     });
 
-    this.server.to(`campaign:${message.campaignId}:chat`).emit('chat.message.created', {
-      id: message.id,
-      campaignId: message.campaignId,
-      authorId: message.userId,
-      authorName: author?.name ?? 'Usuario',
-      message: message.message,
-      createdAt: message.createdAt.toISOString(),
-    });
+    this.server
+      .to(`campaign:${message.campaignId}:chat`)
+      .emit('chat.message.created', {
+        id: message.id,
+        campaignId: message.campaignId,
+        authorId: message.userId,
+        authorName: author?.name ?? 'Usuario',
+        message: message.message,
+        createdAt: message.createdAt.toISOString(),
+      });
   }
 
   @OnEvent('shipment.status.changed')
   onShipmentStatusChanged(event: ShipmentStatusChangedEvent): void {
-    this.server.to(`shipment:${event.shipmentId}:tracking`).emit('shipment.status.changed', {
-      shipmentId: event.shipmentId,
-      previousStatus: event.previousStatus,
-      status: event.status,
-      updatedBy: event.updatedBy,
-      updatedAt: event.updatedAt.toISOString(),
-    });
+    this.server
+      .to(`shipment:${event.shipmentId}:tracking`)
+      .emit('shipment.status.changed', {
+        shipmentId: event.shipmentId,
+        previousStatus: event.previousStatus,
+        status: event.status,
+        updatedBy: event.updatedBy,
+        updatedAt: event.updatedAt.toISOString(),
+      });
   }
 
   @OnEvent('shipment.assigned')
   onShipmentAssigned(event: ShipmentAssignedEvent): void {
-    this.server.to(`shipment:${event.shipmentId}:tracking`).emit('shipment.assignment.changed', {
-      shipmentId: event.shipmentId,
-      volunteerId: event.volunteerId,
-      assignedAt: new Date().toISOString(),
-    });
+    this.server
+      .to(`shipment:${event.shipmentId}:tracking`)
+      .emit('shipment.assignment.changed', {
+        shipmentId: event.shipmentId,
+        volunteerId: event.volunteerId,
+        assignedAt: new Date().toISOString(),
+      });
   }
 
   @OnEvent('shipment.delivered')
   onShipmentDelivered(event: ShipmentDeliveredEvent): void {
-    this.server.to(`shipment:${event.shipmentId}:tracking`).emit('shipment.status.changed', {
-      shipmentId: event.shipmentId,
-      previousStatus: 'in_transit',
-      status: 'delivered',
-      updatedBy: null,
-      updatedAt: event.deliveredAt.toISOString(),
-    });
+    this.server
+      .to(`shipment:${event.shipmentId}:tracking`)
+      .emit('shipment.status.changed', {
+        shipmentId: event.shipmentId,
+        previousStatus: 'in_transit',
+        status: 'delivered',
+        updatedBy: null,
+        updatedAt: event.deliveredAt.toISOString(),
+      });
   }
 
   @OnEvent('shipment.location.changed')
   onShipmentLocationChanged(event: ShipmentLocationChangedEvent): void {
-    this.server.to(`shipment:${event.shipmentId}:tracking`).emit('shipment.location.changed', {
-      shipmentId: event.shipmentId,
-      lat: event.lat,
-      lng: event.lng,
-      speed: event.speed,
-      heading: event.heading,
-      recordedAt: event.recordedAt.toISOString(),
-    });
+    this.server
+      .to(`shipment:${event.shipmentId}:tracking`)
+      .emit('shipment.location.changed', {
+        shipmentId: event.shipmentId,
+        lat: event.lat,
+        lng: event.lng,
+        speed: event.speed,
+        heading: event.heading,
+        recordedAt: event.recordedAt.toISOString(),
+      });
   }
 
   @OnEvent('auction.created')
   onAuctionCreated(event: AuctionCreatedEvent): void {
-    this.server.to(`campaign:${event.campaignId}:auctions`).emit('auction.created', {
-      auctionId: event.auctionId,
-      campaignId: event.campaignId,
-      sellerId: event.sellerId,
-      price: event.price,
-      currency: event.currency,
-      createdAt: new Date().toISOString(),
-    });
+    this.server
+      .to(`campaign:${event.campaignId}:auctions`)
+      .emit('auction.created', {
+        auctionId: event.auctionId,
+        campaignId: event.campaignId,
+        sellerId: event.sellerId,
+        price: event.price,
+        currency: event.currency,
+        createdAt: new Date().toISOString(),
+      });
   }
 
   @OnEvent('auction.sold')
   onAuctionSold(event: AuctionSoldEvent): void {
-    this.server.to(`campaign:${event.campaignId}:auctions`).emit('auction.sold', {
-      auctionId: event.auctionId,
-      campaignId: event.campaignId,
-      buyerId: event.buyerId,
-      soldAt: event.soldAt.toISOString(),
-      price: event.price,
-      currency: event.currency,
-    });
+    this.server
+      .to(`campaign:${event.campaignId}:auctions`)
+      .emit('auction.sold', {
+        auctionId: event.auctionId,
+        campaignId: event.campaignId,
+        buyerId: event.buyerId,
+        soldAt: event.soldAt.toISOString(),
+        price: event.price,
+        currency: event.currency,
+      });
   }
 
   @OnEvent('campaign.inventory.updated')
@@ -557,11 +598,15 @@ export class RealtimeGateway
 
   private tryExtractToken(client: Socket): string | null {
     const authHeader = client.handshake.headers.authorization;
-    if (typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')) {
+    if (
+      typeof authHeader === 'string' &&
+      authHeader.toLowerCase().startsWith('bearer ')
+    ) {
       return authHeader.slice(7);
     }
 
-    const authToken = (client.handshake.auth as { token?: string } | undefined)?.token;
+    const authToken = (client.handshake.auth as { token?: string } | undefined)
+      ?.token;
     if (typeof authToken === 'string' && authToken.trim().length > 0) {
       return authToken;
     }
@@ -569,29 +614,32 @@ export class RealtimeGateway
     return null;
   }
 
-  private resolveAnonymousUser(client: Socket): { userId: number; role: string } {
-    const authData = (client.handshake.auth as { userId?: unknown; role?: unknown } | undefined) ??
-      {};
-    const queryData = (client.handshake.query as { userId?: unknown; role?: unknown }) ??
-      {};
+  private resolveAnonymousUser(client: Socket): {
+    userId: number;
+    role: string;
+  } {
+    const authData =
+      (client.handshake.auth as
+        | { userId?: unknown; role?: unknown }
+        | undefined) ?? {};
+    const queryData =
+      (client.handshake.query as { userId?: unknown; role?: unknown }) ?? {};
 
     const rawUserId = authData.userId ?? queryData.userId;
     const parsedUserId = Number(rawUserId);
-    const userId = Number.isInteger(parsedUserId) && parsedUserId > 0 ? parsedUserId : 1;
+    const userId =
+      Number.isInteger(parsedUserId) && parsedUserId > 0 ? parsedUserId : 1;
 
     const rawRole = authData.role ?? queryData.role;
-    const role = typeof rawRole === 'string' && rawRole.trim().length > 0
-      ? rawRole.trim()
-      : 'donor';
+    const role =
+      typeof rawRole === 'string' && rawRole.trim().length > 0
+        ? rawRole.trim()
+        : 'donor';
 
     return { userId, role };
   }
 
-  private emitSystemError(
-    client: Socket,
-    error: unknown,
-    code: string,
-  ): void {
+  private emitSystemError(client: Socket, error: unknown, code: string): void {
     client.emit('system.error', {
       code,
       message: error instanceof Error ? error.message : 'Unexpected error',

@@ -49,19 +49,25 @@ describe('CreateAuctionDto — CA3 validation', () => {
   describe('durationMinutes', () => {
     it('is valid when durationMinutes is a positive integer', async () => {
       const errors = await validate(buildDto({ durationMinutes: 30 }));
-      const durationErrors = errors.filter((e) => e.property === 'durationMinutes');
+      const durationErrors = errors.filter(
+        (e) => e.property === 'durationMinutes',
+      );
       expect(durationErrors).toHaveLength(0);
     });
 
     it('fails when durationMinutes is zero', async () => {
       const errors = await validate(buildDto({ durationMinutes: 0 }));
-      const durationErrors = errors.filter((e) => e.property === 'durationMinutes');
+      const durationErrors = errors.filter(
+        (e) => e.property === 'durationMinutes',
+      );
       expect(durationErrors.length).toBeGreaterThan(0);
     });
 
     it('fails when durationMinutes is negative', async () => {
       const errors = await validate(buildDto({ durationMinutes: -10 }));
-      const durationErrors = errors.filter((e) => e.property === 'durationMinutes');
+      const durationErrors = errors.filter(
+        (e) => e.property === 'durationMinutes',
+      );
       expect(durationErrors.length).toBeGreaterThan(0);
     });
 
@@ -70,7 +76,9 @@ describe('CreateAuctionDto — CA3 validation', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (dto as any).durationMinutes;
       const errors = await validate(dto);
-      const durationErrors = errors.filter((e) => e.property === 'durationMinutes');
+      const durationErrors = errors.filter(
+        (e) => e.property === 'durationMinutes',
+      );
       expect(durationErrors.length).toBeGreaterThan(0);
     });
   });

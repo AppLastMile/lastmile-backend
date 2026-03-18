@@ -47,7 +47,9 @@ function buildBid(overrides: Partial<Bid> = {}): Bid {
   } as Bid;
 }
 
-function buildCreateBidDto(overrides: Partial<CreateBidDto> = {}): CreateBidDto {
+function buildCreateBidDto(
+  overrides: Partial<CreateBidDto> = {},
+): CreateBidDto {
   return { userId: 7, amount: 150, ...overrides };
 }
 
@@ -64,20 +66,24 @@ function buildMockDataSource(
   bidCreate: jest.Mock,
 ) {
   return {
-    transaction: jest.fn().mockImplementation(async (cb: (manager: unknown) => Promise<unknown>) => {
-      const manager = {
-        getRepository: (entity: unknown) => {
-          if (entity === Auction) {
-            return { findOne: auctionFindOne, update: auctionUpdate };
-          }
-          if (entity === Bid) {
-            return { create: bidCreate, save: bidSave };
-          }
-          return {};
+    transaction: jest
+      .fn()
+      .mockImplementation(
+        async (cb: (manager: unknown) => Promise<unknown>) => {
+          const manager = {
+            getRepository: (entity: unknown) => {
+              if (entity === Auction) {
+                return { findOne: auctionFindOne, update: auctionUpdate };
+              }
+              if (entity === Bid) {
+                return { create: bidCreate, save: bidSave };
+              }
+              return {};
+            },
+          };
+          return cb(manager);
         },
-      };
-      return cb(manager);
-    }),
+      ),
   };
 }
 
@@ -97,19 +103,48 @@ describe('AuctionsService — placeBid', () => {
     auctionFindOne = jest.fn();
     auctionUpdate = jest.fn().mockResolvedValue(undefined);
     bidCreate = jest.fn().mockImplementation((data) => data);
-    bidSave = jest.fn().mockImplementation(async (b) => ({ ...b, id: 10, createdAt: new Date() }));
+    bidSave = jest
+      .fn()
+      .mockImplementation(async (b) => ({
+        ...b,
+        id: 10,
+        createdAt: new Date(),
+      }));
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuctionsService,
-        { provide: getRepositoryToken(Auction), useValue: { findOne: jest.fn(), update: jest.fn(), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() } },
-        { provide: getRepositoryToken(Product), useValue: { findOne: jest.fn() } },
-        { provide: getRepositoryToken(Campaign), useValue: { findOne: jest.fn() } },
+        {
+          provide: getRepositoryToken(Auction),
+          useValue: {
+            findOne: jest.fn(),
+            update: jest.fn(),
+            create: jest.fn(),
+            save: jest.fn(),
+            createQueryBuilder: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(Product),
+          useValue: { findOne: jest.fn() },
+        },
+        {
+          provide: getRepositoryToken(Campaign),
+          useValue: { findOne: jest.fn() },
+        },
         { provide: getRepositoryToken(Bid), useValue: {} },
-        { provide: getRepositoryToken(AuctionBuyIdempotencyRecord), useValue: {} },
+        {
+          provide: getRepositoryToken(AuctionBuyIdempotencyRecord),
+          useValue: {},
+        },
         {
           provide: getDataSourceToken(),
-          useValue: buildMockDataSource(auctionFindOne, auctionUpdate, bidSave, bidCreate),
+          useValue: buildMockDataSource(
+            auctionFindOne,
+            auctionUpdate,
+            bidSave,
+            bidCreate,
+          ),
         },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],
@@ -125,7 +160,10 @@ describe('AuctionsService — placeBid', () => {
     it('saves the bid and returns it with updated auction price', async () => {
       auctionFindOne.mockResolvedValue(buildAuction({ currentPrice: 100 }));
 
-      const result = await service.placeBid(1, buildCreateBidDto({ amount: 150 }));
+      const result = await service.placeBid(
+        1,
+        buildCreateBidDto({ amount: 150 }),
+      );
 
       expect(bidSave).toHaveBeenCalledTimes(1);
       expect(result.amount).toBe(150);
@@ -137,10 +175,13 @@ describe('AuctionsService — placeBid', () => {
 
       await service.placeBid(1, buildCreateBidDto({ amount: 200 }));
 
-      expect(eventEmitter.emit).toHaveBeenCalledWith('bid.placed', expect.objectContaining({
-        auctionId: 1,
-        amount: 200,
-      }));
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'bid.placed',
+        expect.objectContaining({
+          auctionId: 1,
+          amount: 200,
+        }),
+      );
     });
   });
 
@@ -178,7 +219,10 @@ describe('AuctionsService — placeBid', () => {
     it('updates the auction currentPrice to the new bid amount', async () => {
       auctionFindOne.mockResolvedValue(buildAuction({ currentPrice: 100 }));
 
-      const result = await service.placeBid(1, buildCreateBidDto({ amount: 250 }));
+      const result = await service.placeBid(
+        1,
+        buildCreateBidDto({ amount: 250 }),
+      );
 
       expect(auctionUpdate).toHaveBeenCalledWith(
         1,
@@ -203,33 +247,39 @@ describe('AuctionsService — placeBid', () => {
     it('throws NotFoundException when auction does not exist', async () => {
       auctionFindOne.mockResolvedValue(null);
 
-      await expect(
-        service.placeBid(999, buildCreateBidDto()),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.placeBid(999, buildCreateBidDto())).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws BadRequestException when auction is in CREATED state', async () => {
-      auctionFindOne.mockResolvedValue(buildAuction({ status: AuctionStatus.CREATED }));
+      auctionFindOne.mockResolvedValue(
+        buildAuction({ status: AuctionStatus.CREATED }),
+      );
 
-      await expect(
-        service.placeBid(1, buildCreateBidDto()),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.placeBid(1, buildCreateBidDto())).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('throws BadRequestException when auction is CLOSED', async () => {
-      auctionFindOne.mockResolvedValue(buildAuction({ status: AuctionStatus.CLOSED }));
+      auctionFindOne.mockResolvedValue(
+        buildAuction({ status: AuctionStatus.CLOSED }),
+      );
 
-      await expect(
-        service.placeBid(1, buildCreateBidDto()),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.placeBid(1, buildCreateBidDto())).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('throws BadRequestException when auction is SOLD', async () => {
-      auctionFindOne.mockResolvedValue(buildAuction({ status: AuctionStatus.SOLD }));
+      auctionFindOne.mockResolvedValue(
+        buildAuction({ status: AuctionStatus.SOLD }),
+      );
 
-      await expect(
-        service.placeBid(1, buildCreateBidDto()),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.placeBid(1, buildCreateBidDto())).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 });

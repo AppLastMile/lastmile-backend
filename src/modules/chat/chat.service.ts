@@ -10,53 +10,55 @@ import { Message } from './entities/message.entity';
 
 @Injectable()
 export class ChatService {
-	constructor(
-		@InjectRepository(Message)
-		private readonly messagesRepository: Repository<Message>,
-		@InjectRepository(Campaign)
-		private readonly campaignsRepository: Repository<Campaign>,
-		@InjectRepository(User)
-		private readonly usersRepository: Repository<User>,
-		private readonly eventEmitter: EventEmitter2,
-	) {}
+  constructor(
+    @InjectRepository(Message)
+    private readonly messagesRepository: Repository<Message>,
+    @InjectRepository(Campaign)
+    private readonly campaignsRepository: Repository<Campaign>,
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
-	async createMessage(dto: CreateMessageDto): Promise<Message> {
-		await this.ensureCampaignExists(dto.campaignId);
-		await this.ensureUserExists(dto.userId);
+  async createMessage(dto: CreateMessageDto): Promise<Message> {
+    await this.ensureCampaignExists(dto.campaignId);
+    await this.ensureUserExists(dto.userId);
 
-		const created = await this.messagesRepository.save(
-			this.messagesRepository.create(dto),
-		);
+    const created = await this.messagesRepository.save(
+      this.messagesRepository.create(dto),
+    );
 
-		const payload: MessageSentEvent = {
-			messageId: created.id,
-			campaignId: created.campaignId,
-			userId: created.userId,
-		};
-		this.eventEmitter.emit('message.sent', payload);
+    const payload: MessageSentEvent = {
+      messageId: created.id,
+      campaignId: created.campaignId,
+      userId: created.userId,
+    };
+    this.eventEmitter.emit('message.sent', payload);
 
-		return created;
-	}
+    return created;
+  }
 
-	private async ensureCampaignExists(campaignId: number): Promise<void> {
-		const campaign = await this.campaignsRepository.findOne({
-			where: { id: campaignId },
-			select: { id: true },
-		});
+  private async ensureCampaignExists(campaignId: number): Promise<void> {
+    const campaign = await this.campaignsRepository.findOne({
+      where: { id: campaignId },
+      select: { id: true },
+    });
 
-		if (!campaign) {
-			throw new NotFoundException(`Campaign with id ${campaignId} was not found`);
-		}
-	}
+    if (!campaign) {
+      throw new NotFoundException(
+        `Campaign with id ${campaignId} was not found`,
+      );
+    }
+  }
 
-	private async ensureUserExists(userId: number): Promise<void> {
-		const user = await this.usersRepository.findOne({
-			where: { id: userId },
-			select: { id: true },
-		});
+  private async ensureUserExists(userId: number): Promise<void> {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      select: { id: true },
+    });
 
-		if (!user) {
-			throw new NotFoundException(`User with id ${userId} was not found`);
-		}
-	}
+    if (!user) {
+      throw new NotFoundException(`User with id ${userId} was not found`);
+    }
+  }
 }

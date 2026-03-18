@@ -47,7 +47,9 @@ export class AuctionsService {
     });
 
     if (!product) {
-      throw new NotFoundException(`Product with id ${dto.productId} was not found`);
+      throw new NotFoundException(
+        `Product with id ${dto.productId} was not found`,
+      );
     }
 
     if (dto.campaignId) {
@@ -94,7 +96,9 @@ export class AuctionsService {
     const qb = this.auctionsRepository.createQueryBuilder('auction');
 
     if (query.productId) {
-      qb.andWhere('auction.productId = :productId', { productId: query.productId });
+      qb.andWhere('auction.productId = :productId', {
+        productId: query.productId,
+      });
     }
 
     if (query.status && query.status !== 'all') {
@@ -150,7 +154,10 @@ export class AuctionsService {
     return this.toAuctionResponse(updated!);
   }
 
-  async placeBid(auctionId: number, dto: CreateBidDto): Promise<BidResponseDto> {
+  async placeBid(
+    auctionId: number,
+    dto: CreateBidDto,
+  ): Promise<BidResponseDto> {
     const result = await this.dataSource.transaction(async (manager) => {
       const auctionRepo = manager.getRepository(Auction);
       const bidRepo = manager.getRepository(Bid);
@@ -161,7 +168,9 @@ export class AuctionsService {
       });
 
       if (!auction) {
-        throw new NotFoundException(`Auction with id ${auctionId} was not found`);
+        throw new NotFoundException(
+          `Auction with id ${auctionId} was not found`,
+        );
       }
 
       if (auction.status !== AuctionStatus.ACTIVE) {
@@ -313,17 +322,25 @@ export class AuctionsService {
           .set({ collectedMoney: () => 'collectedMoney + :amount' })
           .where('id = :campaignId', { campaignId: soldAuction.campaignId })
           .setParameters({
-            amount: Number(soldAuction.currentPrice ?? soldAuction.initialPrice),
+            amount: Number(
+              soldAuction.currentPrice ?? soldAuction.initialPrice,
+            ),
           })
           .execute();
       }
 
       const response = this.toBuyAuctionResponse(soldAuction);
 
-      await this.saveIdempotencyRecord(idempotencyRepository, auctionId, dto, 200, {
-        ...response,
-        soldAt: response.soldAt.toISOString(),
-      });
+      await this.saveIdempotencyRecord(
+        idempotencyRepository,
+        auctionId,
+        dto,
+        200,
+        {
+          ...response,
+          soldAt: response.soldAt.toISOString(),
+        },
+      );
 
       return response;
     });
@@ -349,7 +366,9 @@ export class AuctionsService {
     });
 
     if (!campaign) {
-      throw new NotFoundException(`Campaign with id ${campaignId} was not found`);
+      throw new NotFoundException(
+        `Campaign with id ${campaignId} was not found`,
+      );
     }
   }
 
@@ -388,7 +407,8 @@ export class AuctionsService {
       itemName: auction.itemName,
       description: auction.description,
       initialPrice: Number(auction.initialPrice),
-      currentPrice: auction.currentPrice !== null ? Number(auction.currentPrice) : null,
+      currentPrice:
+        auction.currentPrice !== null ? Number(auction.currentPrice) : null,
       currency: auction.currency,
       durationMinutes: auction.durationMinutes,
       status: auction.status,

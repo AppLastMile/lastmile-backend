@@ -6,33 +6,33 @@ import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class AuthService {
-	constructor(
-		@InjectRepository(User)
-		private readonly usersRepository: Repository<User>,
-	) {}
+  constructor(
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
+  ) {}
 
-	async login(dto: LoginDto) {
-		const user = await this.usersRepository
-			.createQueryBuilder('user')
-			.addSelect('user.password')
-			.where('user.email = :email', { email: dto.email })
-			.getOne();
+  async login(dto: LoginDto) {
+    const user = await this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .where('user.email = :email', { email: dto.email })
+      .getOne();
 
-		if (!user || user.password !== dto.password) {
-			throw new UnauthorizedException('Invalid credentials');
-		}
+    if (!user || user.password !== dto.password) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
-		const accessToken = Buffer.from(
-			`${user.id}:${user.email}:${Date.now()}`,
-		).toString('base64url');
+    const accessToken = Buffer.from(
+      `${user.id}:${user.email}:${Date.now()}`,
+    ).toString('base64url');
 
-		return {
-			accessToken,
-			user: {
-				id: user.id,
-				email: user.email,
-				role: user.role,
-			},
-		};
-	}
+    return {
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      },
+    };
+  }
 }

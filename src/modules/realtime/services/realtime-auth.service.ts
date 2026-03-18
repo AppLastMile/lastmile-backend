@@ -12,7 +12,8 @@ export class RealtimeAuthService {
   constructor(private readonly configService: ConfigService) {}
 
   verifyToken(rawToken: string): AuthUser {
-    const secret = this.configService.get<string>('JWT_SECRET') ?? 'dev-jwt-secret';
+    const secret =
+      this.configService.get<string>('JWT_SECRET') ?? 'dev-jwt-secret';
     const token = rawToken.trim();
     const [encodedHeader, encodedPayload, encodedSignature] = token.split('.');
 
@@ -53,9 +54,10 @@ export class RealtimeAuthService {
 
   private parsePayload(encodedPayload: string): Record<string, unknown> {
     try {
-      const decoded = Buffer.from(this.base64UrlToBase64(encodedPayload), 'base64').toString(
-        'utf8',
-      );
+      const decoded = Buffer.from(
+        this.base64UrlToBase64(encodedPayload),
+        'base64',
+      ).toString('utf8');
       return JSON.parse(decoded) as Record<string, unknown>;
     } catch {
       throw new UnauthorizedException('Invalid token payload');

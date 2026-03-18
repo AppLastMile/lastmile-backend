@@ -68,7 +68,9 @@ function buildAuction(overrides: Partial<Auction> = {}): Auction {
   } as Auction;
 }
 
-function buildCreateDto(overrides: Partial<CreateAuctionDto> = {}): CreateAuctionDto {
+function buildCreateDto(
+  overrides: Partial<CreateAuctionDto> = {},
+): CreateAuctionDto {
   return {
     productId: 1,
     initialPrice: 100,
@@ -86,10 +88,22 @@ describe('AuctionsService — createAuction', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuctionsService,
-        { provide: getRepositoryToken(Auction), useFactory: mockAuctionRepository },
-        { provide: getRepositoryToken(Product), useFactory: mockProductRepository },
-        { provide: getRepositoryToken(Campaign), useFactory: mockCampaignRepository },
-        { provide: getRepositoryToken(AuctionBuyIdempotencyRecord), useFactory: mockAuctionRepository },
+        {
+          provide: getRepositoryToken(Auction),
+          useFactory: mockAuctionRepository,
+        },
+        {
+          provide: getRepositoryToken(Product),
+          useFactory: mockProductRepository,
+        },
+        {
+          provide: getRepositoryToken(Campaign),
+          useFactory: mockCampaignRepository,
+        },
+        {
+          provide: getRepositoryToken(AuctionBuyIdempotencyRecord),
+          useFactory: mockAuctionRepository,
+        },
         { provide: getDataSourceToken(), useFactory: mockDataSource },
         { provide: EventEmitter2, useFactory: mockEventEmitter },
       ],
@@ -153,7 +167,9 @@ describe('AuctionsService — createAuction', () => {
       auctionRepo.create.mockReturnValue(saved);
       auctionRepo.save.mockResolvedValue(saved);
 
-      const result = await service.createAuction(buildCreateDto({ productId: 42 }));
+      const result = await service.createAuction(
+        buildCreateDto({ productId: 42 }),
+      );
 
       expect(result.productId).toBe(42);
     });
@@ -172,8 +188,14 @@ describe('AuctionsService — createAuction', () => {
     });
 
     it('copies name and description from the product', async () => {
-      const product = buildProduct({ name: 'Water Purifier', description: 'Portable filter' });
-      const saved = buildAuction({ itemName: 'Water Purifier', description: 'Portable filter' });
+      const product = buildProduct({
+        name: 'Water Purifier',
+        description: 'Portable filter',
+      });
+      const saved = buildAuction({
+        itemName: 'Water Purifier',
+        description: 'Portable filter',
+      });
 
       productRepo.findOne.mockResolvedValue(product);
       auctionRepo.create.mockReturnValue(saved);
@@ -189,10 +211,14 @@ describe('AuctionsService — createAuction', () => {
   describe('CA4 — cannot place bids on a CREATED auction', () => {
     it('rejects startAuction call when auction is not in CREATED state at bid time', async () => {
       // A brand-new auction in CREATED status cannot be bid on (tested via startAuction guard)
-      auctionRepo.findOne.mockResolvedValue(buildAuction({ status: AuctionStatus.ACTIVE }));
+      auctionRepo.findOne.mockResolvedValue(
+        buildAuction({ status: AuctionStatus.ACTIVE }),
+      );
 
       // Simulates the scenario: after creation, trying to start again should fail
-      await expect(service.startAuction(1)).rejects.toThrow(BadRequestException);
+      await expect(service.startAuction(1)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -200,9 +226,9 @@ describe('AuctionsService — createAuction', () => {
     it('throws NotFoundException when product does not exist', async () => {
       productRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.createAuction(buildCreateDto({ productId: 999 }))).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.createAuction(buildCreateDto({ productId: 999 })),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('campaignId is optional — creates auction without campaign', async () => {
@@ -228,10 +254,22 @@ describe('AuctionsService — startAuction', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuctionsService,
-        { provide: getRepositoryToken(Auction), useFactory: mockAuctionRepository },
-        { provide: getRepositoryToken(Product), useFactory: mockProductRepository },
-        { provide: getRepositoryToken(Campaign), useFactory: mockCampaignRepository },
-        { provide: getRepositoryToken(AuctionBuyIdempotencyRecord), useFactory: mockAuctionRepository },
+        {
+          provide: getRepositoryToken(Auction),
+          useFactory: mockAuctionRepository,
+        },
+        {
+          provide: getRepositoryToken(Product),
+          useFactory: mockProductRepository,
+        },
+        {
+          provide: getRepositoryToken(Campaign),
+          useFactory: mockCampaignRepository,
+        },
+        {
+          provide: getRepositoryToken(AuctionBuyIdempotencyRecord),
+          useFactory: mockAuctionRepository,
+        },
         { provide: getDataSourceToken(), useFactory: mockDataSource },
         { provide: EventEmitter2, useFactory: mockEventEmitter },
       ],
@@ -287,7 +325,9 @@ describe('AuctionsService — startAuction', () => {
       const after = new Date();
 
       expect(result.startedAt).not.toBeNull();
-      expect(result.startedAt!.getTime()).toBeGreaterThanOrEqual(before.getTime());
+      expect(result.startedAt!.getTime()).toBeGreaterThanOrEqual(
+        before.getTime(),
+      );
       expect(result.startedAt!.getTime()).toBeLessThanOrEqual(after.getTime());
     });
 
@@ -295,7 +335,14 @@ describe('AuctionsService — startAuction', () => {
       const auction = buildAuction();
       auctionRepo.findOne
         .mockResolvedValueOnce(auction)
-        .mockResolvedValueOnce(buildAuction({ status: AuctionStatus.ACTIVE, startedAt: new Date(), endAt: new Date(), currentPrice: 100 }));
+        .mockResolvedValueOnce(
+          buildAuction({
+            status: AuctionStatus.ACTIVE,
+            startedAt: new Date(),
+            endAt: new Date(),
+            currentPrice: 100,
+          }),
+        );
       auctionRepo.update.mockResolvedValue({} as UpdateResult);
 
       await service.startAuction(1);
@@ -324,7 +371,8 @@ describe('AuctionsService — startAuction', () => {
 
       const updateArg = auctionRepo.update.mock.calls[0][1] as Partial<Auction>;
       const expectedDiffMs = durationMinutes * 60 * 1000;
-      const actualDiffMs = updateArg.endAt!.getTime() - updateArg.startedAt!.getTime();
+      const actualDiffMs =
+        updateArg.endAt!.getTime() - updateArg.startedAt!.getTime();
 
       expect(Math.abs(actualDiffMs - expectedDiffMs)).toBeLessThan(100);
     });
@@ -334,7 +382,12 @@ describe('AuctionsService — startAuction', () => {
       auctionRepo.findOne.mockResolvedValueOnce(auction);
       auctionRepo.update.mockResolvedValue({} as UpdateResult);
       auctionRepo.findOne.mockResolvedValueOnce(
-        buildAuction({ status: AuctionStatus.ACTIVE, currentPrice: 250, startedAt: new Date(), endAt: new Date() }),
+        buildAuction({
+          status: AuctionStatus.ACTIVE,
+          currentPrice: 250,
+          startedAt: new Date(),
+          endAt: new Date(),
+        }),
       );
 
       await service.startAuction(1);
@@ -347,22 +400,36 @@ describe('AuctionsService — startAuction', () => {
   describe('Error cases', () => {
     it('throws NotFoundException when auction does not exist', async () => {
       auctionRepo.findOne.mockResolvedValue(null);
-      await expect(service.startAuction(999)).rejects.toThrow(NotFoundException);
+      await expect(service.startAuction(999)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws BadRequestException when auction is already ACTIVE', async () => {
-      auctionRepo.findOne.mockResolvedValue(buildAuction({ status: AuctionStatus.ACTIVE }));
-      await expect(service.startAuction(1)).rejects.toThrow(BadRequestException);
+      auctionRepo.findOne.mockResolvedValue(
+        buildAuction({ status: AuctionStatus.ACTIVE }),
+      );
+      await expect(service.startAuction(1)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('throws BadRequestException when auction is SOLD', async () => {
-      auctionRepo.findOne.mockResolvedValue(buildAuction({ status: AuctionStatus.SOLD }));
-      await expect(service.startAuction(1)).rejects.toThrow(BadRequestException);
+      auctionRepo.findOne.mockResolvedValue(
+        buildAuction({ status: AuctionStatus.SOLD }),
+      );
+      await expect(service.startAuction(1)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('throws BadRequestException when auction is CLOSED', async () => {
-      auctionRepo.findOne.mockResolvedValue(buildAuction({ status: AuctionStatus.CLOSED }));
-      await expect(service.startAuction(1)).rejects.toThrow(BadRequestException);
+      auctionRepo.findOne.mockResolvedValue(
+        buildAuction({ status: AuctionStatus.CLOSED }),
+      );
+      await expect(service.startAuction(1)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 });

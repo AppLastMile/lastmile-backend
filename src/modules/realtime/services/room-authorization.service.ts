@@ -18,7 +18,10 @@ export class RoomAuthorizationService {
     private readonly eventsRepository: Repository<Event>,
   ) {}
 
-  async validateAndNormalizeRoom(room: string, user: AuthUser): Promise<string> {
+  async validateAndNormalizeRoom(
+    room: string,
+    user: AuthUser,
+  ): Promise<string> {
     const campaignChat = room.match(/^campaign:(\d+):chat$/);
     if (campaignChat) {
       await this.ensureCampaignVisible(Number(campaignChat[1]), user);
@@ -52,7 +55,10 @@ export class RoomAuthorizationService {
     throw new ForbiddenException('Room format is invalid or unsupported');
   }
 
-  private async ensureCampaignVisible(campaignId: number, user: AuthUser): Promise<void> {
+  private async ensureCampaignVisible(
+    campaignId: number,
+    user: AuthUser,
+  ): Promise<void> {
     const campaign = await this.campaignsRepository.findOne({
       where: { id: campaignId },
       select: { id: true },
@@ -67,7 +73,10 @@ export class RoomAuthorizationService {
     void user;
   }
 
-  private async ensureShipmentAllowed(shipmentId: number, user: AuthUser): Promise<void> {
+  private async ensureShipmentAllowed(
+    shipmentId: number,
+    user: AuthUser,
+  ): Promise<void> {
     const shipment = await this.shipmentsRepository.findOne({
       where: { id: shipmentId },
       select: { id: true, assignedVolunteerId: true },
@@ -81,14 +90,22 @@ export class RoomAuthorizationService {
       return;
     }
 
-    if (user.role === UserRole.VOLUNTEER && shipment.assignedVolunteerId === user.userId) {
+    if (
+      user.role === UserRole.VOLUNTEER &&
+      shipment.assignedVolunteerId === user.userId
+    ) {
       return;
     }
 
-    throw new ForbiddenException('You are not allowed to subscribe to this shipment');
+    throw new ForbiddenException(
+      'You are not allowed to subscribe to this shipment',
+    );
   }
 
-  private async ensureEventOpsAllowed(eventId: number, user: AuthUser): Promise<void> {
+  private async ensureEventOpsAllowed(
+    eventId: number,
+    user: AuthUser,
+  ): Promise<void> {
     const event = await this.eventsRepository.findOne({
       where: { id: eventId },
       select: { id: true, createdBy: true },
@@ -102,7 +119,8 @@ export class RoomAuthorizationService {
       return;
     }
 
-    throw new ForbiddenException('You are not allowed to subscribe to this event ops room');
+    throw new ForbiddenException(
+      'You are not allowed to subscribe to this event ops room',
+    );
   }
-
 }

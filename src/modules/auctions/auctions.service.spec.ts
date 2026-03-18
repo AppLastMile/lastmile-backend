@@ -333,16 +333,14 @@ describe('AuctionsService — startAuction', () => {
 
     it('passes startedAt in the update call', async () => {
       const auction = buildAuction();
-      auctionRepo.findOne
-        .mockResolvedValueOnce(auction)
-        .mockResolvedValueOnce(
-          buildAuction({
-            status: AuctionStatus.ACTIVE,
-            startedAt: new Date(),
-            endAt: new Date(),
-            currentPrice: 100,
-          }),
-        );
+      auctionRepo.findOne.mockResolvedValueOnce(auction).mockResolvedValueOnce(
+        buildAuction({
+          status: AuctionStatus.ACTIVE,
+          startedAt: new Date(),
+          endAt: new Date(),
+          currentPrice: 100,
+        }),
+      );
       auctionRepo.update.mockResolvedValue({} as UpdateResult);
 
       await service.startAuction(1);

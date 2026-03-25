@@ -16,7 +16,7 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(port);
+  await app.listen(3000, '0.0.0.0');
 
   // Show an easy-to-open local URL even when Nest binds to 0.0.0.0 or ::1.
   const appUrl = await app.getUrl();

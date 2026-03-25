@@ -1,14 +1,23 @@
 import 'dotenv/config';
 import { DataSource, DataSourceOptions } from 'typeorm';
 
-const databaseUrl = process.env.DATABASE_URL;
-const dbPort = Number(process.env.DB_PORT ?? 5432);
+// IMPORTAR ENTIDADES EXPLÍCITAMENTE (CLAVE)
+import { Campaign } from '../modules/campaigns/entities/campaign.entity';
+import { PickupPoint } from '../modules/pickup-points/entities/pickup-point.entity';
 
-const baseConfig = {
-  type: 'postgres' as const,
-  entities: ['src/modules/**/entities/*.entity.ts'],
+const databaseUrl = process.env.DATABASE_URL;
+const dbPort = Number(process.env.DB_PORT ?? 5433);
+
+const baseConfig: DataSourceOptions = {
+  type: 'postgres',
+
+  entities: [Campaign, PickupPoint],
+
   migrations: ['src/migrations/*.ts'],
-  migrationsTransactionMode: 'each' as const,
+  migrationsTransactionMode: 'each',
+
+  synchronize: true,
+
   extra: {
     family: 4,
   },
@@ -22,11 +31,11 @@ const options: DataSourceOptions =
       }
     : {
         ...baseConfig,
-        host: process.env.DB_HOST,
+        host: process.env.DB_HOST ?? 'localhost',
         port: dbPort,
-        username: process.env.DB_USERNAME,
-        password: process.env.DB_PASSWORD,
-        database: process.env.DB_NAME,
+        username: process.env.DB_USERNAME ?? 'postgres',
+        password: process.env.DB_PASSWORD ?? 'postgres',
+        database: process.env.DB_NAME ?? 'lastmile',
       };
 
 export default new DataSource(options);

@@ -33,6 +33,7 @@ import type { ShipmentStatusChangedEvent } from '../../events/shipment-status-ch
 import type { MessageSentEvent } from '../../events/message-sent.event';
 import { RealtimeAuthService } from './services/realtime-auth.service';
 import { RoomAuthorizationService } from './services/room-authorization.service';
+import { PickupPoint } from '../pickup-points/entities/pickup-point.entity';
 
 type AuthenticatedSocket = Socket & {
   data: {
@@ -328,6 +329,58 @@ export class RealtimeGateway
     } catch (error) {
       this.emitSystemError(client, error, 'FORBIDDEN_ROOM');
     }
+  }
+
+  @SubscribeMessage('campaign.subscribe')
+  async handleCampaignSubscribe(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: { campaignId?: number },
+  ) {
+    try {
+      const campaignId = Number(payload?.campaignId);
+
+      if (!Number.isInteger(campaignId) || campaignId <= 0) {
+        throw new BadRequestException('Invalid campaignId');
+      }
+
+      const campaign = await this.campaignsRepository.findOne({
+        where: { id: campaignId },
+        select: { id: true },
+      });
+
+      if (!campaign) {
+        throw new BadRequestException('Campaign does not exist');
+      }
+
+      const room = `campaign:${campaignId}:pickup`;
+
+      await client.join(room);
+
+      client.emit('campaign.subscribed', {
+        room,
+        campaignId,
+        serverTime: new Date().toISOString(),
+      });
+
+      this.logger.log(
+        `pickup room joined user=${client.data.userId} campaign=${campaignId}`,
+      );
+    } catch (error) {
+      this.emitSystemError(client, error, 'CAMPAIGN_SUBSCRIBE_ERROR');
+    }
+  }
+
+  @OnEvent('pickup_point.created')
+  handlePickupPointCreated(point: PickupPoint) {
+    this.logger.log(
+      `pickup_point.created recibido id=${point.id} campaign=${point.campaignId}`,
+    );
+
+    this.server.emit('pickup_point.created', point);
+
+    this.server
+      .to(`campaign:${point.campaignId}:pickup`)
+      .emit('pickup_point.created', point);
   }
 
   @SubscribeMessage('shipment.location.update')

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule } from '../auth/auth.module';
 import { Campaign } from '../campaigns/entities/campaign.entity';
 import { DonationMoney } from '../donations/entities/donation-money.entity';
 import { Product } from '../products/entities/product.entity';
@@ -11,6 +12,7 @@ import { AuctionsService } from './auctions.service';
 
 @Module({
   imports: [
+    AuthModule,
     TypeOrmModule.forFeature([
       Auction,
       AuctionBuyIdempotencyRecord,

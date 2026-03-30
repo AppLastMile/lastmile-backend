@@ -13,6 +13,7 @@ export class AuctionResponseDto {
   durationMinutes!: number;
   status!: AuctionStatus;
   buyerId!: number | null;
+  winnerId!: number | null;
   startedAt!: Date | null;
   endAt!: Date | null;
   createdAt!: Date;

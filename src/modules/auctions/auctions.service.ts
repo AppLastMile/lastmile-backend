@@ -2,11 +2,15 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { AuctionClosedEvent } from '../../events/auction-closed.event';
 import { AuctionCreatedEvent } from '../../events/auction-created.event';
 import { AuctionSoldEvent } from '../../events/auction-sold.event';
 import { BidPlacedEvent } from '../../events/bid-placed.event';
@@ -14,7 +18,7 @@ import { DonationMoney } from '../donations/entities/donation-money.entity';
 import { Campaign } from '../campaigns/entities/campaign.entity';
 import { Product } from '../products/entities/product.entity';
 import { BuyAuctionDto } from './dto/buy-auction.dto';
-import { BidResponseDto } from './dto/bid-response.dto';
+import { AuctionBidDto, BidResponseDto } from './dto/bid-response.dto';
 import { CreateBidDto } from './dto/create-bid.dto';
 import {
   AuctionResponseDto,
@@ -28,10 +32,15 @@ import { Bid } from './entities/bid.entity';
 import { Auction, AuctionStatus } from './entities/auction.entity';
 
 @Injectable()
-export class AuctionsService {
+export class AuctionsService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(AuctionsService.name);
+  private readonly scheduledTimers = new Map<number, NodeJS.Timeout>();
+
   constructor(
     @InjectRepository(Auction)
     private readonly auctionsRepository: Repository<Auction>,
+    @InjectRepository(Bid)
+    private readonly bidsRepository: Repository<Bid>,
     @InjectRepository(Product)
     private readonly productsRepository: Repository<Product>,
     @InjectRepository(Campaign)
@@ -40,6 +49,35 @@ export class AuctionsService {
     private readonly dataSource: DataSource,
     private readonly eventEmitter: EventEmitter2,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    const activeAuctions = await this.auctionsRepository.find({
+      where: { status: AuctionStatus.ACTIVE },
+      select: { id: true, endAt: true },
+    });
+
+    const now = new Date();
+    for (const auction of activeAuctions) {
+      if (!auction.endAt) continue;
+      const delayMs = auction.endAt.getTime() - now.getTime();
+      if (delayMs <= 0) {
+        void this.closeAuction(auction.id);
+      } else {
+        this.scheduleAuctionClose(auction.id, delayMs);
+      }
+    }
+
+    this.logger.log(
+      `Scheduled auto-close for ${activeAuctions.length} active auction(s)`,
+    );
+  }
+
+  onModuleDestroy(): void {
+    for (const timer of this.scheduledTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.scheduledTimers.clear();
+  }
 
   async createAuction(dto: CreateAuctionDto): Promise<AuctionResponseDto> {
     const product = await this.productsRepository.findOne({
@@ -68,6 +106,7 @@ export class AuctionsService {
       durationMinutes: dto.durationMinutes,
       status: AuctionStatus.CREATED,
       buyerId: null,
+      winnerId: null,
       startedAt: null,
       endAt: null,
       soldAt: null,
@@ -122,6 +161,37 @@ export class AuctionsService {
     };
   }
 
+  async findOne(id: number): Promise<AuctionResponseDto> {
+    const auction = await this.auctionsRepository.findOne({ where: { id } });
+    if (!auction) {
+      throw new NotFoundException(`Auction with id ${id} was not found`);
+    }
+    return this.toAuctionResponse(auction);
+  }
+
+  async findBidsByAuction(auctionId: number): Promise<AuctionBidDto[]> {
+    const auction = await this.auctionsRepository.findOne({
+      where: { id: auctionId },
+      select: { id: true },
+    });
+    if (!auction) {
+      throw new NotFoundException(`Auction with id ${auctionId} was not found`);
+    }
+
+    const bids = await this.bidsRepository.find({
+      where: { auctionId },
+      order: { createdAt: 'DESC' },
+    });
+
+    return bids.map((b) => ({
+      id: b.id,
+      auctionId: b.auctionId,
+      userId: b.userId,
+      amount: Number(b.amount),
+      createdAt: b.createdAt,
+    }));
+  }
+
   async startAuction(auctionId: number): Promise<AuctionResponseDto> {
     const auction = await this.auctionsRepository.findOne({
       where: { id: auctionId },
@@ -150,6 +220,9 @@ export class AuctionsService {
     const updated = await this.auctionsRepository.findOne({
       where: { id: auctionId },
     });
+
+    const delayMs = auction.durationMinutes * 60 * 1000;
+    this.scheduleAuctionClose(auctionId, delayMs);
 
     return this.toAuctionResponse(updated!);
   }
@@ -199,12 +272,13 @@ export class AuctionsService {
         version: () => 'version + 1',
       });
 
-      return { bid: savedBid, newCurrentPrice: dto.amount };
+      return { bid: savedBid, newCurrentPrice: dto.amount, campaignId: auction.campaignId };
     });
 
     const payload: BidPlacedEvent = {
       bidId: result.bid.id,
       auctionId,
+      campaignId: result.campaignId,
       userId: dto.userId,
       amount: dto.amount,
       previousPrice: result.newCurrentPrice,
@@ -359,6 +433,77 @@ export class AuctionsService {
     return result;
   }
 
+  private scheduleAuctionClose(auctionId: number, delayMs: number): void {
+    const existing = this.scheduledTimers.get(auctionId);
+    if (existing) {
+      clearTimeout(existing);
+    }
+
+    const timer = setTimeout(() => {
+      void this.closeAuction(auctionId);
+      this.scheduledTimers.delete(auctionId);
+    }, delayMs);
+
+    this.scheduledTimers.set(auctionId, timer);
+  }
+
+  private async closeAuction(auctionId: number): Promise<void> {
+    const closed = await this.dataSource.transaction(async (manager) => {
+      const bidRepo = manager.getRepository(Bid);
+
+      const highestBid = await bidRepo
+        .createQueryBuilder('bid')
+        .where('bid.auctionId = :auctionId', { auctionId })
+        .orderBy('bid.amount', 'DESC')
+        .addOrderBy('bid.createdAt', 'ASC')
+        .limit(1)
+        .getOne();
+
+      const winnerId = highestBid?.userId ?? null;
+
+      const updateResult = await manager
+        .createQueryBuilder()
+        .update(Auction)
+        .set({
+          status: AuctionStatus.CLOSED,
+          winnerId,
+          version: () => 'version + 1',
+        })
+        .where('id = :auctionId', { auctionId })
+        .andWhere('status = :status', { status: AuctionStatus.ACTIVE })
+        .returning('*')
+        .execute();
+
+      const raw = updateResult.raw[0] as Auction | undefined;
+      if (!raw) return null;
+
+      const closedAuction = manager.getRepository(Auction).create(raw);
+      return { auction: closedAuction, winnerId };
+    });
+
+    if (!closed) {
+      return;
+    }
+
+    this.logger.log(
+      `Auction ${auctionId} closed. Winner: ${closed.winnerId ?? 'none'}`,
+    );
+
+    const payload: AuctionClosedEvent = {
+      auctionId,
+      productId: closed.auction.productId,
+      campaignId: closed.auction.campaignId,
+      winnerId: closed.winnerId,
+      itemName: closed.auction.itemName,
+      winningAmount: Number(
+        closed.auction.currentPrice ?? closed.auction.initialPrice,
+      ),
+      currency: closed.auction.currency,
+      closedAt: new Date(),
+    };
+    this.eventEmitter.emit('auction.closed', payload);
+  }
+
   private async ensureCampaignExists(campaignId: number): Promise<void> {
     const campaign = await this.campaignsRepository.findOne({
       where: { id: campaignId },
@@ -413,6 +558,7 @@ export class AuctionsService {
       durationMinutes: auction.durationMinutes,
       status: auction.status,
       buyerId: auction.buyerId,
+      winnerId: auction.winnerId,
       startedAt: auction.startedAt,
       endAt: auction.endAt,
       createdAt: auction.createdAt,

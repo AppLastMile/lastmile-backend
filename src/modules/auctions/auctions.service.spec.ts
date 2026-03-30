@@ -8,6 +8,7 @@ import { Product } from '../products/entities/product.entity';
 import { CreateAuctionDto } from './dto/create-auction.dto';
 import { AuctionBuyIdempotencyRecord } from './entities/auction-buy-idempotency-record.entity';
 import { Auction, AuctionStatus } from './entities/auction.entity';
+import { Bid } from './entities/bid.entity';
 import { AuctionsService } from './auctions.service';
 
 const mockAuctionRepository = () => ({
@@ -90,6 +91,10 @@ describe('AuctionsService — createAuction', () => {
         AuctionsService,
         {
           provide: getRepositoryToken(Auction),
+          useFactory: mockAuctionRepository,
+        },
+        {
+          provide: getRepositoryToken(Bid),
           useFactory: mockAuctionRepository,
         },
         {
@@ -256,6 +261,10 @@ describe('AuctionsService — startAuction', () => {
         AuctionsService,
         {
           provide: getRepositoryToken(Auction),
+          useFactory: mockAuctionRepository,
+        },
+        {
+          provide: getRepositoryToken(Bid),
           useFactory: mockAuctionRepository,
         },
         {

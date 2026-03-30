@@ -61,6 +61,9 @@ export class Auction {
   @Column({ type: 'int', nullable: true })
   buyerId!: number | null;
 
+  @Column({ type: 'int', nullable: true })
+  winnerId!: number | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   startedAt!: Date | null;
 

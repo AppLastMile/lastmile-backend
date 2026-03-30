@@ -40,6 +40,13 @@ export class RoomAuthorizationService {
       return room;
     }
 
+    const auctionBids = room.match(/^auction:(\d+):bids$/);
+    if (auctionBids) {
+      // Public room: any connected user can subscribe to auction bid updates
+      void user;
+      return room;
+    }
+
     const shipmentTracking = room.match(/^shipment:(\d+):tracking$/);
     if (shipmentTracking) {
       await this.ensureShipmentAllowed(Number(shipmentTracking[1]), user);

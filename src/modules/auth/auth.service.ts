@@ -3,12 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { LoginDto } from './dto/login.dto';
 import { User } from '../users/entities/user.entity';
+import { TokenService } from './services/token.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    private readonly tokenService: TokenService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -22,9 +24,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const accessToken = Buffer.from(
-      `${user.id}:${user.email}:${Date.now()}`,
-    ).toString('base64url');
+    const accessToken = this.tokenService.generate({
+      userId: user.id,
+      role: user.role,
+    });
 
     return {
       accessToken,

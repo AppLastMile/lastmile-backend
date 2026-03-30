@@ -6,3 +6,11 @@ export class BidResponseDto {
   currentAuctionPrice!: number;
   createdAt!: Date;
 }
+
+export class AuctionBidDto {
+  id!: number;
+  auctionId!: number;
+  userId!: number;
+  amount!: number;
+  createdAt!: Date;
+}

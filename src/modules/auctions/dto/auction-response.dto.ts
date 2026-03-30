@@ -1,4 +1,4 @@
-import { AuctionStatus } from '../entities/auction.entity';
+import { AuctionBidMode, AuctionStatus } from '../entities/auction.entity';
 
 export class AuctionResponseDto {
   id!: number;
@@ -12,7 +12,10 @@ export class AuctionResponseDto {
   currency!: string;
   durationMinutes!: number;
   status!: AuctionStatus;
+  bidMode!: AuctionBidMode;
+  bidIncrement!: number | null;
   buyerId!: number | null;
+  winnerId!: number | null;
   startedAt!: Date | null;
   endAt!: Date | null;
   createdAt!: Date;

@@ -6,9 +6,11 @@ import {
   ParseIntPipe,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthGuard } from '../auth/guards/auth.guard';
 import { AuctionsService } from './auctions.service';
-import { BidResponseDto } from './dto/bid-response.dto';
+import { AuctionBidDto, BidResponseDto } from './dto/bid-response.dto';
 import { BuyAuctionDto } from './dto/buy-auction.dto';
 import { CreateBidDto } from './dto/create-bid.dto';
 import {
@@ -24,6 +26,7 @@ export class AuctionsController {
   constructor(private readonly auctionsService: AuctionsService) {}
 
   @Post()
+  @UseGuards(AuthGuard)
   createAuction(@Body() dto: CreateAuctionDto): Promise<AuctionResponseDto> {
     return this.auctionsService.createAuction(dto);
   }
@@ -33,7 +36,22 @@ export class AuctionsController {
     return this.auctionsService.findAll(query);
   }
 
+  @Get(':id')
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<AuctionResponseDto> {
+    return this.auctionsService.findOne(id);
+  }
+
+  @Get(':id/bids')
+  findBids(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<AuctionBidDto[]> {
+    return this.auctionsService.findBidsByAuction(id);
+  }
+
   @Post(':id/start')
+  @UseGuards(AuthGuard)
   startAuction(
     @Param('id', ParseIntPipe) id: number,
   ): Promise<AuctionResponseDto> {
@@ -41,6 +59,7 @@ export class AuctionsController {
   }
 
   @Post(':id/bids')
+  @UseGuards(AuthGuard)
   placeBid(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateBidDto,
@@ -49,6 +68,7 @@ export class AuctionsController {
   }
 
   @Post(':id/buy')
+  @UseGuards(AuthGuard)
   buyAuction(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: BuyAuctionDto,

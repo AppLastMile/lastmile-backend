@@ -23,8 +23,10 @@ import { User, UserRole } from '../users/entities/user.entity';
 import { Shipment } from '../logistics/entities/shipment.entity';
 import { ShipmentStatus } from '../logistics/entities/shipment.entity';
 import { ShipmentLocationHistory } from '../logistics/entities/shipment-location-history.entity';
+import type { AuctionClosedEvent } from '../../events/auction-closed.event';
 import type { AuctionCreatedEvent } from '../../events/auction-created.event';
 import type { AuctionSoldEvent } from '../../events/auction-sold.event';
+import type { BidPlacedEvent } from '../../events/bid-placed.event';
 import type { CampaignInventoryUpdatedEvent } from '../../events/campaign-inventory-updated.event';
 import type { ShipmentAssignedEvent } from '../../events/shipment-assigned.event';
 import type { ShipmentDeliveredEvent } from '../../events/shipment-delivered.event';
@@ -635,6 +637,29 @@ export class RealtimeGateway
         price: event.price,
         currency: event.currency,
       });
+  }
+
+  @OnEvent('bid.placed')
+  onBidPlaced(event: BidPlacedEvent): void {
+    this.server.to(`auction:${event.auctionId}:bids`).emit('auction.bid.placed', {
+      bidId: event.bidId,
+      auctionId: event.auctionId,
+      userId: event.userId,
+      amount: event.amount,
+      currentPrice: event.amount,
+      placedAt: new Date().toISOString(),
+    });
+  }
+
+  @OnEvent('auction.closed')
+  onAuctionClosed(event: AuctionClosedEvent): void {
+    this.server.to(`auction:${event.auctionId}:bids`).emit('auction.closed', {
+      auctionId: event.auctionId,
+      winnerId: event.winnerId,
+      winningAmount: event.winningAmount,
+      currency: event.currency,
+      closedAt: event.closedAt.toISOString(),
+    });
   }
 
   @OnEvent('campaign.inventory.updated')

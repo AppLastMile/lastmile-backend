@@ -14,6 +14,11 @@ export enum AuctionStatus {
   CANCELLED = 'cancelled',
 }
 
+export enum AuctionBidMode {
+  FREE = 'free',
+  FIXED_INCREMENT = 'fixed_increment',
+}
+
 @Entity('auctions')
 @Index('idx_auctions_product_status_created_at', [
   'productId',
@@ -61,6 +66,9 @@ export class Auction {
   @Column({ type: 'int', nullable: true })
   buyerId!: number | null;
 
+  @Column({ type: 'int', nullable: true })
+  winnerId!: number | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   startedAt!: Date | null;
 
@@ -69,6 +77,16 @@ export class Auction {
 
   @Column({ type: 'timestamptz', nullable: true })
   soldAt!: Date | null;
+
+  @Column({
+    type: 'enum',
+    enum: AuctionBidMode,
+    default: AuctionBidMode.FREE,
+  })
+  bidMode!: AuctionBidMode;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  bidIncrement!: number | null;
 
   @Column({ type: 'int', default: 1 })
   version!: number;

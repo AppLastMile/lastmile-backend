@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { LoginDto } from './dto/login.dto';
 import { User } from '../users/entities/user.entity';
-import * as bcrypt from 'bcrypt';
+import { TokenService } from './services/token.service';
 
 @Injectable()
 export class AuthService {
@@ -19,13 +19,7 @@ export class AuthService {
       .where('user.email = :email', { email: dto.email })
       .getOne();
 
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    const isMatch = await bcrypt.compare(dto.password, user.password);
-
-    if (!isMatch) {
+    if (!user || user.password !== dto.password) {
       throw new UnauthorizedException('Invalid credentials');
     }
 

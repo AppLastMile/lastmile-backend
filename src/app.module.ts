@@ -17,6 +17,7 @@ import { DonationsModule } from './modules/donations/donations.module';
 import { LogisticsModule } from './modules/logistics/logistics.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { AuctionsModule } from './modules/auctions/auctions.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProductsModule } from './modules/products/products.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { PickupPointsModule } from './modules/pickup-points/pickup-points.module';
@@ -45,6 +46,7 @@ import { PickupPointsModule } from './modules/pickup-points/pickup-points.module
     CampaignsModule,
     DonationsModule,
     AuctionsModule,
+    NotificationsModule,
     ProductsModule,
     LogisticsModule,
     ChatModule,

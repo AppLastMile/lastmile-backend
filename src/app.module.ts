@@ -24,16 +24,17 @@ import { PickupPointsModule } from './modules/pickup-points/pickup-points.module
 
 @Module({
   imports: [
+    // 🔧 ENV CONFIG
     ConfigModule.forRoot({
       isGlobal: true,
       validate: validateEnv,
     }),
 
+    // 🗄️ DATABASE
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         ...getTypeOrmConfig(configService),
-
         autoLoadEntities: true,
       }),
     }),
@@ -50,6 +51,7 @@ import { PickupPointsModule } from './modules/pickup-points/pickup-points.module
     ProductsModule,
     LogisticsModule,
     ChatModule,
+
     RealtimeModule,
 
     PickupPointsModule,

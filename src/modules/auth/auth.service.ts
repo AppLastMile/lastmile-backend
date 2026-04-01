@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { LoginDto } from './dto/login.dto';
 import { User } from '../users/entities/user.entity';
 import { TokenService } from './services/token.service';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
@@ -19,7 +20,16 @@ export class AuthService {
       .where('user.email = :email', { email: dto.email })
       .getOne();
 
-    if (!user || user.password !== dto.password) {
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      user.password,
+    );
+
+    if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
 

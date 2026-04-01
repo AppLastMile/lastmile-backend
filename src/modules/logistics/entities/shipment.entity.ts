@@ -3,7 +3,10 @@ import {
   CreateDateColumn,
   Entity,
   PrimaryGeneratedColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Campaign } from '../../campaigns/entities/campaign.entity';
 
 export enum ShipmentStatus {
   PENDING = 'pending',
@@ -17,7 +20,7 @@ export class Shipment {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ nullable: true })
   campaignId!: number;
 
   @Column()
@@ -35,4 +38,8 @@ export class Shipment {
 
   @CreateDateColumn()
   createdAt!: Date;
+
+  @ManyToOne(() => Campaign, (campaign: Campaign) => campaign.shipments)
+  @JoinColumn({ name: 'campaignId' })
+  campaign!: Campaign;
 }

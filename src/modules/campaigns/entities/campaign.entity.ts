@@ -5,7 +5,9 @@ import {
   PrimaryGeneratedColumn,
   OneToMany,
 } from 'typeorm';
+
 import { PickupPoint } from '../../pickup-points/entities/pickup-point.entity';
+import { Shipment } from '../../logistics/entities/shipment.entity';
 
 export enum CampaignType {
   MONEY = 'money',
@@ -42,6 +44,9 @@ export class Campaign {
   @CreateDateColumn()
   createdAt!: Date;
 
-  @OneToMany(() => PickupPoint, (point) => point.campaign)
+  @OneToMany(() => PickupPoint, (point: PickupPoint) => point.campaign)
   pickupPoints!: PickupPoint[];
+
+  @OneToMany(() => Shipment, (shipment: Shipment) => shipment.campaign)
+  shipments!: Shipment[];
 }

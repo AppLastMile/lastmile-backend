@@ -25,11 +25,58 @@ import {
 import { UpdatePickupPointDto } from './dto/update-pickup-point.dto';
 import { UpdateShipmentStatusDto } from './dto/update-shipment-status.dto';
 import { LogisticsService } from './logistics.service';
+import { UpdateShipmentLocationDto } from './dto/update-shipment-location.dto';
+
+// 🔥 IMPORTANTE
+import { TrackingGateway } from '../realtime/tracking.gateway';
 
 @Controller('logistics')
 export class LogisticsController {
-  constructor(private readonly logisticsService: LogisticsService) {}
+  constructor(
+    private readonly logisticsService: LogisticsService,
+    private readonly trackingGateway: TrackingGateway, // 🔥 inyectado
+  ) {}
 
+  // ================================
+  // 📍 TRACKING EN TIEMPO REAL
+  // ================================
+  @Post('shipments/:id/location')
+  async updateShipmentLocation(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateShipmentLocationDto,
+  ) {
+    console.log('🔥 CONTROLLER HIT - LOCATION UPDATE', id);
+
+    const result =
+      await this.logisticsService.createShipmentLocationUpdate({
+        shipmentId: id,
+        lat: dto.lat,
+        lng: dto.lng,
+        speed: dto.speed,
+        heading: dto.heading,
+        userId: dto.userId,
+        updatedBy: 1,
+      });
+
+    // 🔥 EMIT EN TIEMPO REAL
+    this.trackingGateway.server.emit(`tracking-${id}`, {
+      shipmentId: id,
+      userId: dto.userId,
+      lat: dto.lat,
+      lng: dto.lng,
+    });
+
+    console.log(`📡 EMITIENDO tracking-${id}`, {
+      lat: dto.lat,
+      lng: dto.lng,
+    });
+
+    return result;
+  }
+
+  // ================================
+  // 📍 PICKUP POINTS
+  // ================================
   @Post('pickup-points')
   createPickupPoint(
     @Body() dto: CreatePickupPointDto,
@@ -59,8 +106,13 @@ export class LogisticsController {
     return this.logisticsService.updatePickupPoint(id, dto);
   }
 
+  // ================================
+  // 📦 SHIPMENTS
+  // ================================
   @Post('shipments')
-  createShipment(@Body() dto: CreateShipmentDto): Promise<ShipmentResponseDto> {
+  createShipment(
+    @Body() dto: CreateShipmentDto,
+  ): Promise<ShipmentResponseDto> {
     return this.logisticsService.createShipment(dto);
   }
 
@@ -93,6 +145,23 @@ export class LogisticsController {
     return this.logisticsService.findShipmentLocationHistory(id, query);
   }
 
+  @Patch('shipments/:id/status')
+  async updateShipmentStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateShipmentStatusDto,
+  ): Promise<ShipmentResponseDto> {
+    const shipment = await this.logisticsService.updateShipmentStatus(id, dto);
+
+    this.trackingGateway.server.emit('shipment-updated', shipment);
+
+    console.log('📡 shipment-updated', shipment.id);
+
+    return shipment;
+  }
+
+  // ================================
+  // 👤 VOLUNTARIOS
+  // ================================
   @Patch('shipments/:id/assign-volunteer')
   assignVolunteer(
     @Param('id', ParseIntPipe) id: number,

@@ -12,11 +12,7 @@ import { RealtimeModule } from '../realtime/realtime.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      PickupPoint,
-      Shipment,
-      ShipmentLocationHistory,
-    ]),
+    TypeOrmModule.forFeature([PickupPoint, Shipment, ShipmentLocationHistory]),
     RealtimeModule,
   ],
   controllers: [LogisticsController],

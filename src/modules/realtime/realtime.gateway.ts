@@ -641,14 +641,16 @@ export class RealtimeGateway
 
   @OnEvent('bid.placed')
   onBidPlaced(event: BidPlacedEvent): void {
-    this.server.to(`auction:${event.auctionId}:bids`).emit('auction.bid.placed', {
-      bidId: event.bidId,
-      auctionId: event.auctionId,
-      userId: event.userId,
-      amount: event.amount,
-      currentPrice: event.amount,
-      placedAt: new Date().toISOString(),
-    });
+    this.server
+      .to(`auction:${event.auctionId}:bids`)
+      .emit('auction.bid.placed', {
+        bidId: event.bidId,
+        auctionId: event.auctionId,
+        userId: event.userId,
+        amount: event.amount,
+        currentPrice: event.amount,
+        placedAt: new Date().toISOString(),
+      });
   }
 
   @OnEvent('auction.closed')

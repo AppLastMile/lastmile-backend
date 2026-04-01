@@ -6,12 +6,12 @@ LastMile is a humanitarian logistics platform designed to coordinate aid during 
 
 The platform connects **organizers, donors, and volunteers** to coordinate:
 
-* disaster events
-* donation campaigns
-* resource collection
-* logistics operations
-* volunteer assignments
-* communication between participants
+- disaster events
+- donation campaigns
+- resource collection
+- logistics operations
+- volunteer assignments
+- communication between participants
 
 The system will be consumed by a mobile application built with **Expo / React Native**.
 
@@ -23,24 +23,24 @@ The backend provides a REST API and WebSocket services.
 
 Backend Framework
 
-* NestJS
-* Node.js
-* TypeScript
+- NestJS
+- Node.js
+- TypeScript
 
 Database
 
-* PostgreSQL
+- PostgreSQL
 
 ORM
 
-* TypeORM
+- TypeORM
 
 Other technologies
 
-* WebSockets (for chat)
-* REST API
-* class-validator for validation
-* Docker (optional)
+- WebSockets (for chat)
+- REST API
+- class-validator for validation
+- Docker (optional)
 
 ---
 
@@ -50,10 +50,10 @@ The backend follows **modular architecture using NestJS modules**.
 
 Each module contains:
 
-* Controller (API endpoints)
-* Service (business logic)
-* Entity (database model)
-* DTOs (data validation)
+- Controller (API endpoints)
+- Service (business logic)
+- Entity (database model)
+- DTOs (data validation)
 
 Project structure:
 
@@ -104,16 +104,16 @@ Organizers create events describing disasters.
 
 Example events:
 
-* Flood in Medellín
-* Landslide in Manizales
-* Earthquake in Cali
+- Flood in Medellín
+- Landslide in Manizales
+- Earthquake in Cali
 
 Responsibilities:
 
-* create event
-* list events
-* update events
-* view event details
+- create event
+- list events
+- update events
+- view event details
 
 ---
 
@@ -129,16 +129,16 @@ Event: Flood in Medellín
 
 Campaigns:
 
-* Food donations
-* Clothes donations
-* Financial aid
+- Food donations
+- Clothes donations
+- Financial aid
 
 Responsibilities:
 
-* create campaign
-* list campaigns by event
-* track progress
-* show collected donations
+- create campaign
+- list campaigns by event
+- track progress
+- show collected donations
 
 Each campaign also contains a **general chat**.
 
@@ -148,14 +148,14 @@ Each campaign also contains a **general chat**.
 
 Handles both types of donations:
 
-* monetary donations
-* physical items
+- monetary donations
+- physical items
 
 Responsibilities:
 
-* register donations
-* update campaign totals
-* track donation status
+- register donations
+- update campaign totals
+- track donation status
 
 ---
 
@@ -165,10 +165,10 @@ Manages physical operations for delivering resources.
 
 Responsibilities:
 
-* create pickup points
-* assign shipments
-* assign volunteers
-* track delivery status
+- create pickup points
+- assign shipments
+- assign volunteers
+- track delivery status
 
 ---
 
@@ -213,9 +213,9 @@ donor
 
 Relationships:
 
-* organizer creates events
-* donors donate to campaigns
-* volunteers receive shipment assignments
+- organizer creates events
+- donors donate to campaigns
+- volunteers receive shipment assignments
 
 ---
 
@@ -238,7 +238,7 @@ createdAt
 
 Relationships:
 
-* event has many campaigns
+- event has many campaigns
 
 ---
 
@@ -270,9 +270,9 @@ mixed
 
 Relationships:
 
-* campaign belongs to event
-* campaign has many donations
-* campaign has many messages
+- campaign belongs to event
+- campaign has many donations
+- campaign has many messages
 
 ---
 
@@ -292,8 +292,8 @@ createdAt
 
 Relationships:
 
-* belongs to campaign
-* belongs to user
+- belongs to campaign
+- belongs to user
 
 ---
 
@@ -342,8 +342,8 @@ createdAt
 
 Relationships:
 
-* pickup point receives donations
-* pickup point is used in shipments
+- pickup point receives donations
+- pickup point is used in shipments
 
 ---
 
@@ -373,9 +373,9 @@ delivered
 
 Relationships:
 
-* shipment belongs to campaign
-* shipment assigned to volunteer
-* shipment linked to pickup point
+- shipment belongs to campaign
+- shipment assigned to volunteer
+- shipment linked to pickup point
 
 ---
 
@@ -395,8 +395,8 @@ createdAt
 
 Relationships:
 
-* message belongs to campaign
-* message belongs to user
+- message belongs to campaign
+- message belongs to user
 
 ---
 
@@ -472,12 +472,12 @@ WS /campaigns/:campaignId/chat
 
 Copilot should generate code following these guidelines:
 
-* Use NestJS decorators
-* Keep controllers thin
-* Business logic must be inside services
-* Use DTOs for validation
-* Use TypeORM repositories
-* Follow clean modular design
+- Use NestJS decorators
+- Keep controllers thin
+- Business logic must be inside services
+- Use DTOs for validation
+- Use TypeORM repositories
+- Follow clean modular design
 
 Naming conventions:
 
@@ -499,12 +499,12 @@ events.service.ts
 
 The backend should support the coordination of humanitarian operations by providing APIs for:
 
-* disaster event management
-* campaign coordination
-* donation tracking
-* logistics operations
-* volunteer assignment
-* real-time communication
+- disaster event management
+- campaign coordination
+- donation tracking
+- logistics operations
+- volunteer assignment
+- real-time communication
 
 Event-Driven Architecture
 
@@ -533,17 +533,17 @@ Event Flow Example
 Example flow when a donation is created:
 
 User makes donation
-       ↓
+↓
 Donations Module
-       ↓
+↓
 Emit event: donation.created
-       ↓
+↓
 Campaigns Module listens
-       ↓
+↓
 Update campaign totals
-       ↓
+↓
 Logistics Module listens
-       ↓
+↓
 Check if shipment should be created
 Example Events
 
@@ -565,16 +565,16 @@ Example Event Implementation
 Example event emission:
 
 this.eventEmitter.emit('donation.created', {
-  campaignId,
-  donorId,
-  amount,
+campaignId,
+donorId,
+amount,
 });
 
 Example event listener:
 
 @OnEvent('donation.created')
 handleDonationCreated(payload: DonationCreatedEvent) {
-  // update campaign progress
+// update campaign progress
 }
 Event-Driven Module Interaction
 
@@ -583,19 +583,19 @@ Modules should interact through events whenever possible.
 Example:
 
 Donations Module
-   ↓ emit event
+↓ emit event
 Campaign Module
-   ↓ update totals
+↓ update totals
 Logistics Module
-   ↓ create shipment if needed
+↓ create shipment if needed
 Notification Module
-   ↓ notify users
+↓ notify users
 Event Folder Structure
 src/
- ├── events/
- │   ├── donation-created.event.ts
- │   ├── campaign-created.event.ts
- │   └── shipment-assigned.event.ts
+├── events/
+│ ├── donation-created.event.ts
+│ ├── campaign-created.event.ts
+│ └── shipment-assigned.event.ts
 When to Use Events
 
 Copilot should generate events for actions such as:

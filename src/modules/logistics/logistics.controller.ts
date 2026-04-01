@@ -47,16 +47,15 @@ export class LogisticsController {
   ) {
     console.log('🔥 CONTROLLER HIT - LOCATION UPDATE', id);
 
-    const result =
-      await this.logisticsService.createShipmentLocationUpdate({
-        shipmentId: id,
-        lat: dto.lat,
-        lng: dto.lng,
-        speed: dto.speed,
-        heading: dto.heading,
-        userId: dto.userId,
-        updatedBy: 1,
-      });
+    const result = await this.logisticsService.createShipmentLocationUpdate({
+      shipmentId: id,
+      lat: dto.lat,
+      lng: dto.lng,
+      speed: dto.speed,
+      heading: dto.heading,
+      userId: dto.userId,
+      updatedBy: 1,
+    });
 
     // 🔥 EMIT EN TIEMPO REAL
     this.trackingGateway.server.emit(`tracking-${id}`, {
@@ -110,9 +109,7 @@ export class LogisticsController {
   // 📦 SHIPMENTS
   // ================================
   @Post('shipments')
-  createShipment(
-    @Body() dto: CreateShipmentDto,
-  ): Promise<ShipmentResponseDto> {
+  createShipment(@Body() dto: CreateShipmentDto): Promise<ShipmentResponseDto> {
     return this.logisticsService.createShipment(dto);
   }
 

@@ -5,9 +5,7 @@ import { NotFoundException } from '@nestjs/common';
 
 @Injectable()
 export class LogisticsService {
-  constructor(
-    private readonly trackingGateway: TrackingGateway,
-  ) {}
+  constructor(private readonly trackingGateway: TrackingGateway) {}
 
   // =============================
   // TRACKING EN TIEMPO REAL
@@ -33,7 +31,7 @@ export class LogisticsService {
 
     this.trackingGateway.emitNotification(
       data.userId,
-      '📍 Nueva ubicación registrada'
+      '📍 Nueva ubicación registrada',
     );
 
     return {
@@ -105,12 +103,10 @@ export class LogisticsService {
 
   private enrichShipment(shipment: any) {
     const point = this.pickupPoints.find(
-      (p) => p.id === shipment.pickupPointId
+      (p) => p.id === shipment.pickupPointId,
     );
 
-    const campaign = this.campaigns.find(
-      (c) => c.eventId === point?.eventId
-    );
+    const campaign = this.campaigns.find((c) => c.eventId === point?.eventId);
 
     return {
       ...shipment,
@@ -176,7 +172,7 @@ export class LogisticsService {
     const volunteerId = Number(query.assignedVolunteerId);
 
     const filtered = this.shipments.filter(
-      (s) => s.assignedVolunteerId === volunteerId
+      (s) => s.assignedVolunteerId === volunteerId,
     );
 
     const enriched = filtered.map((s) => this.enrichShipment(s));

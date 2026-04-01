@@ -51,10 +51,7 @@ export class TrackingGateway
     this.emitLocation(data);
 
     // 🔔 TEST NOTIFICACIÓN (IMPORTANTE)
-    this.emitNotification(
-      data.userId,
-      '📍 Nueva ubicación registrada'
-    );
+    this.emitNotification(data.userId, '📍 Nueva ubicación registrada');
   }
 
   // =============================

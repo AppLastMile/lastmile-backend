@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { OnEvent } from '@nestjs/event-emitter';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Repository } from 'typeorm';
 import { Server, Socket } from 'socket.io';
 import { Message } from '../chat/entities/message.entity';
@@ -72,6 +73,7 @@ export class RealtimeGateway
     private readonly shipmentLocationsRepository: Repository<ShipmentLocationHistory>,
     private readonly realtimeAuthService: RealtimeAuthService,
     private readonly roomAuthorizationService: RoomAuthorizationService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
@@ -99,6 +101,9 @@ export class RealtimeGateway
       socket.data.role = authUser.role;
       socket.data.rateLimit = {};
       socket.data.isAuthenticated = true;
+
+      // Ensure per-user notifications can be delivered without extra join calls.
+      await socket.join(`user:${authUser.userId}`);
 
       this.logger.log(
         `WS connected user=${authUser.userId} socket=${client.id}`,
@@ -146,6 +151,26 @@ export class RealtimeGateway
         room: normalizedRoom,
         serverTime: new Date().toISOString(),
       });
+
+      const isChatRoom = normalizedRoom.includes(':chat');
+      if (isChatRoom && client.data.isAuthenticated) {
+        const campaignIdMatch = normalizedRoom.match(/campaign:(\d+):chat/);
+        if (campaignIdMatch) {
+          const campaignId = Number(campaignIdMatch[1]);
+          const user = await this.usersRepository.findOne({
+            where: { id: client.data.userId },
+            select: { id: true, name: true },
+          });
+
+          if (user) {
+            this.eventEmitter.emit('chat.join', {
+              campaignId,
+              userId: user.id,
+              userName: user.name,
+            });
+          }
+        }
+      }
     } catch (error) {
       this.logger.warn(
         `room join denied user=${client.data.userId} room=${payload?.room ?? 'unknown'} reason=${error instanceof Error ? error.message : 'unknown'}`,
@@ -619,6 +644,16 @@ export class RealtimeGateway
         quantity: event.quantity,
         updatedAt: new Date().toISOString(),
       });
+  }
+
+  @OnEvent('notification.created')
+  onNotificationCreated(event: any): void {
+    this.server.to(`user:${event.userId}`).emit('notification.new', {
+      notificationId: event.notificationId,
+      message: event.message,
+      auctionId: event.auctionId,
+      createdAt: event.createdAt.toISOString(),
+    });
   }
 
   private tryExtractToken(client: Socket): string | null {

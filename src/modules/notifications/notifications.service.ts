@@ -1,20 +1,38 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource, Not } from 'typeorm';
 import type { AuctionClosedEvent } from '../../events/auction-closed.event';
+import type { AuctionSoldEvent } from '../../events/auction-sold.event';
+import type { MessageSentEvent } from '../../events/message-sent.event';
+import type { ChatJoinEvent } from '../../events/chat-join.event';
 import { Notification } from './entities/notification.entity';
 import {
   NotificationResponseDto,
   PaginatedNotificationsDto,
 } from './dto/notification-response.dto';
 import { FindNotificationsQueryDto } from './dto/find-notifications-query.dto';
+import { Bid } from '../auctions/entities/bid.entity';
+import { Campaign } from '../campaigns/entities/campaign.entity';
+import { Message } from '../chat/entities/message.entity';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class NotificationsService {
   constructor(
     @InjectRepository(Notification)
     private readonly notificationsRepository: Repository<Notification>,
+    @InjectRepository(Bid)
+    private readonly bidsRepository: Repository<Bid>,
+    @InjectRepository(Campaign)
+    private readonly campaignsRepository: Repository<Campaign>,
+    @InjectRepository(Message)
+    private readonly messagesRepository: Repository<Message>,
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
+    private readonly dataSource: DataSource,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(
@@ -29,6 +47,15 @@ export class NotificationsService {
       read: false,
     });
     const saved = await this.notificationsRepository.save(notification);
+
+    this.eventEmitter.emit('notification.created', {
+      notificationId: saved.id,
+      userId: saved.userId,
+      message: saved.message,
+      auctionId: saved.auctionId,
+      createdAt: saved.createdAt,
+    });
+
     return this.toResponse(saved);
   }
 
@@ -84,6 +111,57 @@ export class NotificationsService {
 
     const message = `You won the auction for "${event.itemName}" with a bid of ${event.winningAmount} ${event.currency}`;
     await this.create(event.winnerId, message, event.auctionId);
+  }
+
+  @OnEvent('message.sent')
+  async onMessageSent(event: MessageSentEvent): Promise<void> {
+    const message = await this.messagesRepository.findOne({
+      where: { id: event.messageId },
+    });
+
+    if (!message) return;
+
+    const campaign = await this.campaignsRepository.findOne({
+      where: { id: event.campaignId },
+    });
+
+    if (!campaign) return;
+
+    const sender = await this.usersRepository.findOne({
+      where: { id: event.userId },
+      select: { id: true, name: true },
+    });
+
+    const senderName = sender?.name?.trim() || 'Usuario';
+    const notifMessage = `Nuevo mensaje en campaña "${campaign.name}" de ${senderName}`;
+
+    const recipients = await this.usersRepository.find({
+      where: { id: Not(event.userId) },
+      select: { id: true },
+    });
+
+    for (const recipient of recipients) {
+      await this.create(recipient.id, notifMessage, null);
+    }
+  }
+
+  @OnEvent('auction.sold')
+  async onAuctionSold(event: AuctionSoldEvent): Promise<void> {
+    // Notify buyer of successful purchase
+    const buyerMessage = `Congratulations! You bought an auction item for ${event.price} ${event.currency}`;
+    await this.create(event.buyerId, buyerMessage, event.auctionId);
+
+    // Notify other bidders they lost
+    const otherBids = await this.bidsRepository.find({
+      where: { auctionId: event.auctionId },
+    });
+
+    for (const bid of otherBids) {
+      if (bid.userId !== event.buyerId) {
+        const loserMessage = `An auction you bid on has been sold to another user.`;
+        await this.create(bid.userId, loserMessage, event.auctionId);
+      }
+    }
   }
 
   private toResponse(notification: Notification): NotificationResponseDto {

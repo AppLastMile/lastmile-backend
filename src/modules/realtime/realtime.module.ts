@@ -9,7 +9,6 @@ import { Shipment } from '../logistics/entities/shipment.entity';
 import { User } from '../users/entities/user.entity';
 
 import { RealtimeGateway } from './realtime.gateway';
-import { TrackingGateway } from './tracking.gateway';
 
 import { RealtimeAuthService } from './services/realtime-auth.service';
 import { RoomAuthorizationService } from './services/room-authorization.service';
@@ -27,10 +26,11 @@ import { RoomAuthorizationService } from './services/room-authorization.service'
   ],
   providers: [
     RealtimeGateway,
-    TrackingGateway,
     RealtimeAuthService,
     RoomAuthorizationService,
   ],
-  exports: [TrackingGateway],
+  exports: [
+    RealtimeGateway,
+  ],
 })
 export class RealtimeModule {}

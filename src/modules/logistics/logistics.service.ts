@@ -1,47 +1,10 @@
-import { Injectable } from '@nestjs/common';
-import { TrackingGateway } from '../realtime/tracking.gateway';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { ShipmentStatus } from './entities/shipment.entity';
-import { NotFoundException } from '@nestjs/common';
 
 @Injectable()
 export class LogisticsService {
-  constructor(private readonly trackingGateway: TrackingGateway) {}
-
   // =============================
-  // TRACKING EN TIEMPO REAL
-  // =============================
-
-  async createShipmentLocationUpdate(data: {
-    shipmentId: number;
-    lat: number;
-    lng: number;
-    speed?: number;
-    heading?: number;
-    userId: string;
-    updatedBy: number;
-  }) {
-    console.log('📍 LOCATION RECIBIDA EN BACK:', data);
-
-    this.trackingGateway.emitLocation({
-      shipmentId: data.shipmentId,
-      lat: data.lat,
-      lng: data.lng,
-      userId: data.userId,
-    });
-
-    this.trackingGateway.emitNotification(
-      data.userId,
-      '📍 Nueva ubicación registrada',
-    );
-
-    return {
-      status: 'ok',
-      message: 'Location updated and emitted',
-    };
-  }
-
-  // =============================
-  // MOCK DATA (ALINEADO A TU BD)
+  // MOCK DATA (temporal)
   // =============================
 
   private campaigns = [
@@ -98,7 +61,7 @@ export class LogisticsService {
   ];
 
   // =============================
-  // UTIL JOIN (🔥 CLAVE)
+  // UTIL JOIN
   // =============================
 
   private enrichShipment(shipment: any) {
@@ -120,7 +83,7 @@ export class LogisticsService {
 
   async createPickupPoint(dto: any) {
     return {
-      id: 1,
+      id: Date.now(),
       ...dto,
     };
   }
@@ -155,15 +118,17 @@ export class LogisticsService {
   }
 
   // =============================
-  // SHIPMENTS (🔥 FIX REAL)
+  // SHIPMENTS
   // =============================
 
   async createShipment(dto: any) {
     const shipment = {
-      id: 99,
+      id: Date.now(),
       status: ShipmentStatus.PENDING,
       ...dto,
     };
+
+    this.shipments.push(shipment);
 
     return this.enrichShipment(shipment);
   }
@@ -190,28 +155,58 @@ export class LogisticsService {
 
   async findShipmentById(id: number) {
     const shipment = this.shipments.find((s) => s.id === id);
-    return shipment ? this.enrichShipment(shipment) : null;
+
+    if (!shipment) {
+      throw new NotFoundException(`Shipment ${id} no encontrado`);
+    }
+
+    return this.enrichShipment(shipment);
   }
 
   async assignVolunteer(id: number, dto: any) {
-    return this.enrichShipment({
-      id,
-      status: ShipmentStatus.ASSIGNED,
-      campaignId: 1,
-      pickupPointId: 1,
-      assignedVolunteerId: dto.volunteerId,
-      createdAt: new Date(),
-    });
+    const shipment = this.shipments.find((s) => s.id === id);
+
+    if (!shipment) {
+      throw new NotFoundException(`Shipment ${id} no encontrado`);
+    }
+
+    shipment.assignedVolunteerId = dto.volunteerId;
+    shipment.status = ShipmentStatus.ASSIGNED;
+
+    return this.enrichShipment(shipment);
   }
 
   async updateShipmentStatus(id: number, dto: any) {
     const shipment = this.shipments.find((s) => s.id === id);
 
-    if (!shipment) return null;
+    if (!shipment) {
+      throw new NotFoundException('Shipment no encontrado');
+    }
 
-    shipment.status = dto.status as ShipmentStatus;
+    shipment.status = dto.status;
 
     return this.enrichShipment(shipment);
+  }
+
+  // =============================
+  // TRACKING (SIN SOCKET AQUÍ)
+  // =============================
+
+  async createShipmentLocationUpdate(data: {
+    shipmentId: number;
+    lat: number;
+    lng: number;
+    speed?: number;
+    heading?: number;
+    userId: string;
+    updatedBy: number;
+  }) {
+    console.log('📍 LOCATION RECIBIDA EN BACK:', data);
+
+    return {
+      status: 'ok',
+      message: 'Location received',
+    };
   }
 
   async findShipmentLatestLocation(id: number) {

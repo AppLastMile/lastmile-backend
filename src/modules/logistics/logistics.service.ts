@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Repository } from 'typeorm';
@@ -248,6 +253,33 @@ export class LogisticsService {
     return this.toShipmentResponse(updatedShipment);
   }
 
+  async updateShipmentStatusForVolunteer(
+    id: number,
+    dto: UpdateShipmentStatusDto,
+    volunteerId: number,
+  ): Promise<ShipmentResponseDto> {
+    const shipment = await this.shipmentsRepository.findOne({ where: { id } });
+    if (!shipment) {
+      throw new NotFoundException({
+        success: false,
+        message: 'Envío no encontrado.',
+      });
+    }
+
+    if (
+      !shipment.assignedVolunteerId ||
+      shipment.assignedVolunteerId !== volunteerId
+    ) {
+      throw new ForbiddenException({
+        success: false,
+        message: 'No tienes permisos para actualizar este envío.',
+      });
+    }
+
+    this.ensureValidVolunteerTransition(shipment.status, dto.status);
+    return this.updateShipmentStatus(id, dto);
+  }
+
   async createShipmentLocationUpdate(params: {
     shipmentId: number;
     lat: number;
@@ -378,6 +410,23 @@ export class LogisticsService {
       volunteerId: shipment.assignedVolunteerId,
     };
     this.eventEmitter.emit('shipment.assigned', eventPayload);
+  }
+
+  private ensureValidVolunteerTransition(
+    current: ShipmentStatus,
+    next: ShipmentStatus,
+  ): void {
+    const isAssignedToInTransit =
+      current === ShipmentStatus.ASSIGNED && next === ShipmentStatus.IN_TRANSIT;
+    const isInTransitToDelivered =
+      current === ShipmentStatus.IN_TRANSIT && next === ShipmentStatus.DELIVERED;
+
+    if (!isAssignedToInTransit && !isInTransitToDelivered) {
+      throw new ConflictException({
+        success: false,
+        message: 'Transición de estado no permitida.',
+      });
+    }
   }
 
   private toPickupPointResponse(

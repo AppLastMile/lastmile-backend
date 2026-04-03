@@ -1,3 +1,8 @@
+# Nota sobre soporte a eventos (modo temporal)
+
+Los endpoints de join/leave de eventos pueden estar implementados con almacenamiento en memoria temporal.
+Esto significa que los datos se pierden al reiniciar el servidor.
+
 <p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>

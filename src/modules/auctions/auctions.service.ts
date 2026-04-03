@@ -79,20 +79,17 @@ export class AuctionsService implements OnModuleInit, OnModuleDestroy {
     this.scheduledTimers.clear();
   }
 
-  async createAuction(dto: CreateAuctionDto): Promise<AuctionResponseDto> {
-    const product = await this.productsRepository.findOne({
-      where: { id: dto.productId },
+  async createAuction(
+    dto: CreateAuctionDto,
+    sellerId: number,
+  ): Promise<AuctionResponseDto> {
+    // Auto-generate product with itemName
+    const newProduct = this.productsRepository.create({
+      name: dto.itemName.trim(),
+      description: '',
+      createdBy: sellerId,
     });
-
-    if (!product) {
-      throw new NotFoundException(
-        `Product with id ${dto.productId} was not found`,
-      );
-    }
-
-    if (dto.campaignId) {
-      await this.ensureCampaignExists(dto.campaignId);
-    }
+    const savedProduct = await this.productsRepository.save(newProduct);
 
     const bidMode = dto.bidMode ?? AuctionBidMode.FREE;
 
@@ -103,11 +100,11 @@ export class AuctionsService implements OnModuleInit, OnModuleDestroy {
     }
 
     const auction = this.auctionsRepository.create({
-      productId: dto.productId,
-      campaignId: dto.campaignId ?? null,
-      sellerId: product.createdBy,
-      itemName: product.name,
-      description: product.description,
+      productId: savedProduct.id,
+      campaignId: null,
+      sellerId: sellerId,
+      itemName: dto.itemName.trim(),
+      description: '',
       initialPrice: dto.initialPrice,
       currentPrice: null,
       currency: (dto.currency ?? 'COP').toUpperCase(),

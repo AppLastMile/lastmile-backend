@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, Max, Min, ValidateIf } from 'class-validator';
 import { ShipmentStatus } from '../entities/shipment.entity';
 
 export class FindShipmentsQueryDto {
@@ -27,9 +27,12 @@ export class FindShipmentsQueryDto {
   pickupPointId?: number;
 
   @IsOptional()
-  @Transform(({ value }: { value: string }) => Number(value))
+  @Transform(({ value }: { value: string }) =>
+    value === 'me' ? 'me' : Number(value),
+  )
+  @ValidateIf((dto: FindShipmentsQueryDto) => dto.assignedVolunteerId !== 'me')
   @IsInt()
-  assignedVolunteerId?: number;
+  assignedVolunteerId?: number | 'me';
 
   @IsOptional()
   @IsEnum(ShipmentStatus)

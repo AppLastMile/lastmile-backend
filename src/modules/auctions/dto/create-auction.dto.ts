@@ -1,6 +1,7 @@
 import {
   IsEnum,
   IsInt,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
@@ -12,8 +13,11 @@ import {
 import { AuctionBidMode } from '../entities/auction.entity';
 
 export class CreateAuctionDto {
-  @IsInt()
-  productId!: number;
+  @IsNotEmpty()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(150)
+  itemName!: string;
 
   @IsInt()
   @Min(1)
@@ -28,10 +32,6 @@ export class CreateAuctionDto {
   @MinLength(3)
   @MaxLength(3)
   currency?: string;
-
-  @IsOptional()
-  @IsInt()
-  campaignId?: number;
 
   @IsOptional()
   @IsEnum(AuctionBidMode)

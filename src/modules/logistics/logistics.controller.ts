@@ -7,7 +7,11 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { AuthGuard } from '../auth/guards/auth.guard';
+import type { TokenPayload } from '../auth/services/token.service';
 import { AssignShipmentVolunteerDto } from './dto/assign-shipment-volunteer.dto';
 import { CreatePickupPointDto } from './dto/create-pickup-point.dto';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
@@ -65,9 +69,18 @@ export class LogisticsController {
   }
 
   @Get('shipments')
+  @UseGuards(AuthGuard)
   findShipments(
     @Query() query: FindShipmentsQueryDto,
+    @CurrentUser() user: TokenPayload,
   ): Promise<PaginatedShipmentsDto> {
+    if (query.assignedVolunteerId === 'me') {
+      return this.logisticsService.findShipments({
+        ...query,
+        assignedVolunteerId: user.userId,
+      });
+    }
+
     return this.logisticsService.findShipments(query);
   }
 
@@ -102,10 +115,16 @@ export class LogisticsController {
   }
 
   @Patch('shipments/:id/status')
+  @UseGuards(AuthGuard)
   updateShipmentStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateShipmentStatusDto,
+    @CurrentUser() user: TokenPayload,
   ): Promise<ShipmentResponseDto> {
-    return this.logisticsService.updateShipmentStatus(id, dto);
+    return this.logisticsService.updateShipmentStatusForVolunteer(
+      id,
+      dto,
+      user.userId,
+    );
   }
 }

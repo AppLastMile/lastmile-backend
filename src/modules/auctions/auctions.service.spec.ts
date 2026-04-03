@@ -21,6 +21,8 @@ const mockAuctionRepository = () => ({
 
 const mockProductRepository = () => ({
   findOne: jest.fn(),
+  create: jest.fn(),
+  save: jest.fn(),
 });
 
 const mockCampaignRepository = () => ({
@@ -73,7 +75,7 @@ function buildCreateDto(
   overrides: Partial<CreateAuctionDto> = {},
 ): CreateAuctionDto {
   return {
-    productId: 1,
+    itemName: 'Test Auction',
     initialPrice: 100,
     durationMinutes: 60,
     ...overrides,
@@ -120,96 +122,109 @@ describe('AuctionsService — createAuction', () => {
   });
 
   describe('CA1 — auction is saved in the database', () => {
-    it('creates and saves the auction when product exists', async () => {
-      const product = buildProduct();
-      const saved = buildAuction();
+    it('creates and saves the auction with auto-generated product', async () => {
+      const sellerId = 5;
+      const createdProduct = buildProduct({ id: 42 });
+      const savedAuction = buildAuction({ productId: 42, sellerId });
 
-      productRepo.findOne.mockResolvedValue(product);
-      auctionRepo.create.mockReturnValue(saved);
-      auctionRepo.save.mockResolvedValue(saved);
+      productRepo.create.mockReturnValue(createdProduct);
+      productRepo.save.mockResolvedValue(createdProduct);
+      auctionRepo.create.mockReturnValue(savedAuction);
+      auctionRepo.save.mockResolvedValue(savedAuction);
 
-      const result = await service.createAuction(buildCreateDto());
+      const result = await service.createAuction(buildCreateDto(), sellerId);
 
+      expect(productRepo.create).toHaveBeenCalledWith({
+        name: 'Test Auction',
+        description: '',
+        createdBy: sellerId,
+      });
+      expect(productRepo.save).toHaveBeenCalled();
       expect(auctionRepo.save).toHaveBeenCalledTimes(1);
       expect(result.id).toBe(1);
+      expect(result.productId).toBe(42);
     });
   });
 
   describe('CA2 — auction is created with CREATED status', () => {
     it('assigns CREATED as the initial status', async () => {
-      const product = buildProduct();
-      const saved = buildAuction({ status: AuctionStatus.CREATED });
+      const sellerId = 5;
+      const createdProduct = buildProduct({ id: 42 });
+      const saved = buildAuction({ status: AuctionStatus.CREATED, productId: 42, sellerId });
 
-      productRepo.findOne.mockResolvedValue(product);
+      productRepo.create.mockReturnValue(createdProduct);
+      productRepo.save.mockResolvedValue(createdProduct);
       auctionRepo.create.mockReturnValue(saved);
       auctionRepo.save.mockResolvedValue(saved);
 
-      const result = await service.createAuction(buildCreateDto());
+      const result = await service.createAuction(buildCreateDto(), sellerId);
 
       expect(result.status).toBe(AuctionStatus.CREATED);
     });
 
     it('does not accept bids right after creation (status is not ACTIVE)', async () => {
-      const product = buildProduct();
-      const saved = buildAuction({ status: AuctionStatus.CREATED });
+      const sellerId = 5;
+      const createdProduct = buildProduct({ id: 42 });
+      const saved = buildAuction({ status: AuctionStatus.CREATED, productId: 42, sellerId });
 
-      productRepo.findOne.mockResolvedValue(product);
+      productRepo.create.mockReturnValue(createdProduct);
+      productRepo.save.mockResolvedValue(createdProduct);
       auctionRepo.create.mockReturnValue(saved);
       auctionRepo.save.mockResolvedValue(saved);
 
-      const result = await service.createAuction(buildCreateDto());
+      const result = await service.createAuction(buildCreateDto(), sellerId);
 
       expect(result.status).not.toBe(AuctionStatus.ACTIVE);
     });
   });
 
   describe('CA3 — auction is linked to the product', () => {
-    it('stores the productId on the auction', async () => {
-      const product = buildProduct({ id: 42 });
-      const saved = buildAuction({ productId: 42 });
+    it('auto-generates productId from created product', async () => {
+      const sellerId = 5;
+      const createdProduct = buildProduct({ id: 99 });
+      const saved = buildAuction({ productId: 99, sellerId });
 
-      productRepo.findOne.mockResolvedValue(product);
+      productRepo.create.mockReturnValue(createdProduct);
+      productRepo.save.mockResolvedValue(createdProduct);
       auctionRepo.create.mockReturnValue(saved);
       auctionRepo.save.mockResolvedValue(saved);
 
-      const result = await service.createAuction(
-        buildCreateDto({ productId: 42 }),
-      );
+      const result = await service.createAuction(buildCreateDto(), sellerId);
 
-      expect(result.productId).toBe(42);
+      expect(result.productId).toBe(99);
     });
 
-    it('populates sellerId from the product creator', async () => {
-      const product = buildProduct({ createdBy: 99 });
-      const saved = buildAuction({ sellerId: 99 });
+    it('uses sellerId from parameter as auction seller', async () => {
+      const sellerId = 99;
+      const createdProduct = buildProduct({ id: 42 });
+      const saved = buildAuction({ sellerId: 99, productId: 42 });
 
-      productRepo.findOne.mockResolvedValue(product);
+      productRepo.create.mockReturnValue(createdProduct);
+      productRepo.save.mockResolvedValue(createdProduct);
       auctionRepo.create.mockReturnValue(saved);
       auctionRepo.save.mockResolvedValue(saved);
 
-      const result = await service.createAuction(buildCreateDto());
+      const result = await service.createAuction(buildCreateDto(), sellerId);
 
       expect(result.sellerId).toBe(99);
     });
 
-    it('copies name and description from the product', async () => {
-      const product = buildProduct({
-        name: 'Water Purifier',
-        description: 'Portable filter',
-      });
-      const saved = buildAuction({
-        itemName: 'Water Purifier',
-        description: 'Portable filter',
-      });
+    it('uses itemName from DTO for auction name', async () => {
+      const sellerId = 5;
+      const createdProduct = buildProduct({ id: 42 });
+      const saved = buildAuction({ itemName: 'Laptop Gaming', productId: 42, sellerId });
 
-      productRepo.findOne.mockResolvedValue(product);
+      productRepo.create.mockReturnValue(createdProduct);
+      productRepo.save.mockResolvedValue(createdProduct);
       auctionRepo.create.mockReturnValue(saved);
       auctionRepo.save.mockResolvedValue(saved);
 
-      const result = await service.createAuction(buildCreateDto());
+      const result = await service.createAuction(
+        buildCreateDto({ itemName: 'Laptop Gaming' }),
+        sellerId,
+      );
 
-      expect(result.itemName).toBe('Water Purifier');
-      expect(result.description).toBe('Portable filter');
+      expect(result.itemName).toBe('Laptop Gaming');
     });
   });
 
@@ -228,23 +243,17 @@ describe('AuctionsService — createAuction', () => {
   });
 
   describe('Error cases', () => {
-    it('throws NotFoundException when product does not exist', async () => {
-      productRepo.findOne.mockResolvedValue(null);
+    it('campaignId is not used — creates auction without campaign', async () => {
+      const sellerId = 5;
+      const createdProduct = buildProduct({ id: 42 });
+      const saved = buildAuction({ campaignId: null, productId: 42, sellerId });
 
-      await expect(
-        service.createAuction(buildCreateDto({ productId: 999 })),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('campaignId is optional — creates auction without campaign', async () => {
-      const product = buildProduct();
-      const saved = buildAuction({ campaignId: null });
-
-      productRepo.findOne.mockResolvedValue(product);
+      productRepo.create.mockReturnValue(createdProduct);
+      productRepo.save.mockResolvedValue(createdProduct);
       auctionRepo.create.mockReturnValue(saved);
       auctionRepo.save.mockResolvedValue(saved);
 
-      const result = await service.createAuction(buildCreateDto());
+      const result = await service.createAuction(buildCreateDto(), sellerId);
 
       expect(result.campaignId).toBeNull();
     });

@@ -3,7 +3,7 @@ import { CreateAuctionDto } from './create-auction.dto';
 
 function buildDto(overrides: Partial<CreateAuctionDto> = {}): CreateAuctionDto {
   const dto = new CreateAuctionDto();
-  dto.productId = 1;
+  dto.itemName = 'Test Auction Item';
   dto.initialPrice = 100;
   dto.durationMinutes = 60;
   return Object.assign(dto, overrides);
@@ -86,6 +86,11 @@ describe('CreateAuctionDto — CA3 validation', () => {
   describe('full valid payload', () => {
     it('passes validation with all required fields correct', async () => {
       const errors = await validate(buildDto());
+      expect(errors).toHaveLength(0);
+    });
+
+    it('passes validation when itemName is provided', async () => {
+      const errors = await validate(buildDto({ itemName: 'Generador portatil' }));
       expect(errors).toHaveLength(0);
     });
   });

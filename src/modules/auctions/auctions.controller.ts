@@ -9,6 +9,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/guards/auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { TokenPayload } from '../auth/services/token.service';
 import { AuctionsService } from './auctions.service';
 import { AuctionBidDto, BidResponseDto } from './dto/bid-response.dto';
 import { BuyAuctionDto } from './dto/buy-auction.dto';
@@ -27,8 +29,11 @@ export class AuctionsController {
 
   @Post()
   @UseGuards(AuthGuard)
-  createAuction(@Body() dto: CreateAuctionDto): Promise<AuctionResponseDto> {
-    return this.auctionsService.createAuction(dto);
+  createAuction(
+    @Body() dto: CreateAuctionDto,
+    @CurrentUser() user: TokenPayload,
+  ): Promise<AuctionResponseDto> {
+    return this.auctionsService.createAuction(dto, user.userId);
   }
 
   @Get()

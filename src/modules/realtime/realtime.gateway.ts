@@ -46,10 +46,24 @@ type AuthenticatedSocket = Socket & {
   };
 };
 
+const defaultCorsOrigins = [
+  'http://localhost:8081',
+  'http://127.0.0.1:8081',
+  'http://localhost:19006',
+  'http://127.0.0.1:19006',
+];
+
+const corsOrigins =
+  process.env.CORS_ORIGINS
+    ?.split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0) ?? defaultCorsOrigins;
+
 @WebSocketGateway({
   namespace: '/ws',
   cors: {
-    origin: '*',
+    origin: corsOrigins,
+    credentials: true,
   },
 })
 export class RealtimeGateway

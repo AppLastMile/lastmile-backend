@@ -29,7 +29,11 @@ import { CreateAuctionDto } from './dto/create-auction.dto';
 import { FindAuctionsQueryDto } from './dto/find-auctions-query.dto';
 import { AuctionBuyIdempotencyRecord } from './entities/auction-buy-idempotency-record.entity';
 import { Bid } from './entities/bid.entity';
-import { Auction, AuctionBidMode, AuctionStatus } from './entities/auction.entity';
+import {
+  Auction,
+  AuctionBidMode,
+  AuctionStatus,
+} from './entities/auction.entity';
 
 @Injectable()
 export class AuctionsService implements OnModuleInit, OnModuleDestroy {
@@ -111,7 +115,8 @@ export class AuctionsService implements OnModuleInit, OnModuleDestroy {
       durationMinutes: dto.durationMinutes,
       status: AuctionStatus.CREATED,
       bidMode,
-      bidIncrement: bidMode === AuctionBidMode.FIXED_INCREMENT ? dto.bidIncrement! : null,
+      bidIncrement:
+        bidMode === AuctionBidMode.FIXED_INCREMENT ? dto.bidIncrement! : null,
       buyerId: null,
       winnerId: null,
       startedAt: null,
@@ -267,7 +272,9 @@ export class AuctionsService implements OnModuleInit, OnModuleDestroy {
         bidAmount = currentPrice + Number(auction.bidIncrement);
       } else {
         if (dto.amount === undefined) {
-          throw new BadRequestException('amount is required for free-bid auctions');
+          throw new BadRequestException(
+            'amount is required for free-bid auctions',
+          );
         }
         if (dto.amount <= currentPrice) {
           throw new BadRequestException(
@@ -289,7 +296,11 @@ export class AuctionsService implements OnModuleInit, OnModuleDestroy {
         version: () => 'version + 1',
       });
 
-      return { bid: savedBid, newCurrentPrice: bidAmount, campaignId: auction.campaignId };
+      return {
+        bid: savedBid,
+        newCurrentPrice: bidAmount,
+        campaignId: auction.campaignId,
+      };
     });
 
     const payload: BidPlacedEvent = {
@@ -575,7 +586,8 @@ export class AuctionsService implements OnModuleInit, OnModuleDestroy {
       durationMinutes: auction.durationMinutes,
       status: auction.status,
       bidMode: auction.bidMode,
-      bidIncrement: auction.bidIncrement !== null ? Number(auction.bidIncrement) : null,
+      bidIncrement:
+        auction.bidIncrement !== null ? Number(auction.bidIncrement) : null,
       buyerId: auction.buyerId,
       winnerId: auction.winnerId,
       startedAt: auction.startedAt,

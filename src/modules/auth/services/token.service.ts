@@ -26,9 +26,7 @@ export class TokenService {
     );
 
     const signature = this.base64UrlEncode(
-      createHmac('sha256', secret)
-        .update(`${header}.${body}`)
-        .digest(),
+      createHmac('sha256', secret).update(`${header}.${body}`).digest(),
     );
 
     return `${header}.${body}.${signature}`;
@@ -76,7 +74,10 @@ export class TokenService {
 
   private parsePayload(encoded: string): Record<string, unknown> {
     try {
-      const decoded = Buffer.from(this.base64UrlToBase64(encoded), 'base64').toString('utf8');
+      const decoded = Buffer.from(
+        this.base64UrlToBase64(encoded),
+        'base64',
+      ).toString('utf8');
       return JSON.parse(decoded) as Record<string, unknown>;
     } catch {
       throw new UnauthorizedException('Invalid token payload');

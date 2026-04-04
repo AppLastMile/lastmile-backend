@@ -419,7 +419,8 @@ export class LogisticsService {
     const isAssignedToInTransit =
       current === ShipmentStatus.ASSIGNED && next === ShipmentStatus.IN_TRANSIT;
     const isInTransitToDelivered =
-      current === ShipmentStatus.IN_TRANSIT && next === ShipmentStatus.DELIVERED;
+      current === ShipmentStatus.IN_TRANSIT &&
+      next === ShipmentStatus.DELIVERED;
 
     if (!isAssignedToInTransit && !isInTransitToDelivered) {
       throw new ConflictException({

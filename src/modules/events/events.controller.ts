@@ -57,7 +57,11 @@ export class EventsController {
   joinEvent(
     @Param('eventId', ParseIntPipe) eventId: number,
     @CurrentUser() user: TokenPayload,
-  ): { success: true; message: string; data: { eventId: number; userId: number } } {
+  ): {
+    success: true;
+    message: string;
+    data: { eventId: number; userId: number };
+  } {
     this.eventSupportService.joinEvent(eventId, user.userId);
     return {
       success: true,
@@ -71,7 +75,11 @@ export class EventsController {
   leaveEvent(
     @Param('eventId', ParseIntPipe) eventId: number,
     @CurrentUser() user: TokenPayload,
-  ): { success: true; message: string; data: { eventId: number; userId: number } } {
+  ): {
+    success: true;
+    message: string;
+    data: { eventId: number; userId: number };
+  } {
     this.eventSupportService.leaveEvent(eventId, user.userId);
     return {
       success: true,
@@ -81,9 +89,11 @@ export class EventsController {
   }
 
   @Get(':eventId/supporters/count')
-  supportersCount(
-    @Param('eventId', ParseIntPipe) eventId: number,
-  ): { success: true; message: string; data: { eventId: number; supportersCount: number } } {
+  supportersCount(@Param('eventId', ParseIntPipe) eventId: number): {
+    success: true;
+    message: string;
+    data: { eventId: number; supportersCount: number };
+  } {
     return {
       success: true,
       message: 'Conteo de apoyos obtenido correctamente.',

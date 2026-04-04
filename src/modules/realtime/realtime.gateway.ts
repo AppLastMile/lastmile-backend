@@ -54,8 +54,7 @@ const defaultCorsOrigins = [
 ];
 
 const corsOrigins =
-  process.env.CORS_ORIGINS
-    ?.split(',')
+  process.env.CORS_ORIGINS?.split(',')
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0) ?? defaultCorsOrigins;
 
@@ -627,14 +626,16 @@ export class RealtimeGateway
 
   @OnEvent('bid.placed')
   onBidPlaced(event: BidPlacedEvent): void {
-    this.server.to(`auction:${event.auctionId}:bids`).emit('auction.bid.placed', {
-      bidId: event.bidId,
-      auctionId: event.auctionId,
-      userId: event.userId,
-      amount: event.amount,
-      currentPrice: event.amount,
-      placedAt: new Date().toISOString(),
-    });
+    this.server
+      .to(`auction:${event.auctionId}:bids`)
+      .emit('auction.bid.placed', {
+        bidId: event.bidId,
+        auctionId: event.auctionId,
+        userId: event.userId,
+        amount: event.amount,
+        currentPrice: event.amount,
+        placedAt: new Date().toISOString(),
+      });
   }
 
   @OnEvent('auction.closed')

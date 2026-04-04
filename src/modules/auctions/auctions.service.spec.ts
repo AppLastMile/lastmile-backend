@@ -150,7 +150,11 @@ describe('AuctionsService — createAuction', () => {
     it('assigns CREATED as the initial status', async () => {
       const sellerId = 5;
       const createdProduct = buildProduct({ id: 42 });
-      const saved = buildAuction({ status: AuctionStatus.CREATED, productId: 42, sellerId });
+      const saved = buildAuction({
+        status: AuctionStatus.CREATED,
+        productId: 42,
+        sellerId,
+      });
 
       productRepo.create.mockReturnValue(createdProduct);
       productRepo.save.mockResolvedValue(createdProduct);
@@ -165,7 +169,11 @@ describe('AuctionsService — createAuction', () => {
     it('does not accept bids right after creation (status is not ACTIVE)', async () => {
       const sellerId = 5;
       const createdProduct = buildProduct({ id: 42 });
-      const saved = buildAuction({ status: AuctionStatus.CREATED, productId: 42, sellerId });
+      const saved = buildAuction({
+        status: AuctionStatus.CREATED,
+        productId: 42,
+        sellerId,
+      });
 
       productRepo.create.mockReturnValue(createdProduct);
       productRepo.save.mockResolvedValue(createdProduct);
@@ -212,7 +220,11 @@ describe('AuctionsService — createAuction', () => {
     it('uses itemName from DTO for auction name', async () => {
       const sellerId = 5;
       const createdProduct = buildProduct({ id: 42 });
-      const saved = buildAuction({ itemName: 'Laptop Gaming', productId: 42, sellerId });
+      const saved = buildAuction({
+        itemName: 'Laptop Gaming',
+        productId: 42,
+        sellerId,
+      });
 
       productRepo.create.mockReturnValue(createdProduct);
       productRepo.save.mockResolvedValue(createdProduct);

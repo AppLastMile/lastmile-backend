@@ -1,5 +1,12 @@
 import { Transform } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, Max, Min, ValidateIf } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  Max,
+  Min,
+  ValidateIf,
+} from 'class-validator';
 import { ShipmentStatus } from '../entities/shipment.entity';
 
 export class FindShipmentsQueryDto {

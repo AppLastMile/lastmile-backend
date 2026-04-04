@@ -11,8 +11,7 @@ const defaultCorsOrigins = [
 ];
 
 const corsOrigins =
-  process.env.CORS_ORIGINS
-    ?.split(',')
+  process.env.CORS_ORIGINS?.split(',')
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0) ?? defaultCorsOrigins;
 
@@ -43,7 +42,9 @@ async function bootstrap() {
   // Swagger documentation
   const config = new DocumentBuilder()
     .setTitle('LastMile API')
-    .setDescription('API for LastMile platform - Real-time auctions and logistics')
+    .setDescription(
+      'API for LastMile platform - Real-time auctions and logistics',
+    )
     .setVersion('1.0')
     .addBearerAuth()
     .build();

@@ -48,21 +48,47 @@ type AuthenticatedSocket = Socket & {
 
 const defaultCorsOrigins = [
   'http://localhost:8081',
-  'http://127.0.0.1:8081',
   'http://localhost:19006',
   'http://127.0.0.1:19006',
+  'https://chasmic-lavada-pneumatically.ngrok-free.dev',
 ];
+
+const expoTunnelOriginPattern = /^https:\/\/[a-z0-9-]+-8081\.exp\.direct$/;
 
 const corsOrigins =
   process.env.CORS_ORIGINS?.split(',')
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0) ?? defaultCorsOrigins;
 
+const allowedCorsOrigins = new Set(corsOrigins);
+
+const isAllowedCorsOrigin = (origin?: string): boolean => {
+  if (!origin) {
+    return true;
+  }
+
+  return (
+    allowedCorsOrigins.has(origin) || expoTunnelOriginPattern.test(origin)
+  );
+};
+
 @WebSocketGateway({
   namespace: '/ws',
   cors: {
-    origin: corsOrigins,
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      callback(null, isAllowedCorsOrigin(origin));
+    },
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'ngrok-skip-browser-warning',
+    ],
   },
 })
 export class RealtimeGateway

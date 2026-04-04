@@ -122,7 +122,9 @@ describe('Logistics volunteer flow (HTTP)', () => {
             );
           }
           if (filters.status !== undefined) {
-            result = result.filter((shipment) => shipment.status === filters.status);
+            result = result.filter(
+              (shipment) => shipment.status === filters.status,
+            );
           }
 
           result.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
@@ -200,7 +202,9 @@ describe('Logistics volunteer flow (HTTP)', () => {
       .set('Authorization', 'Bearer token-v7')
       .expect(200);
 
-    const ids = response.body.data.map((shipment: { id: number }) => shipment.id);
+    const ids = response.body.data.map(
+      (shipment: { id: number }) => shipment.id,
+    );
     expect(ids).toEqual([1, 3]);
   });
 

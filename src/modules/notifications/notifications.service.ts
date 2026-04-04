@@ -65,8 +65,7 @@ export class NotificationsService {
     const page = query.page ?? 1;
     const limit = query.limit ?? 50;
 
-    const qb =
-      this.notificationsRepository.createQueryBuilder('notification');
+    const qb = this.notificationsRepository.createQueryBuilder('notification');
 
     if (query.userId) {
       qb.andWhere('notification.userId = :userId', { userId: query.userId });
@@ -94,7 +93,9 @@ export class NotificationsService {
   }
 
   async markAsRead(id: number): Promise<NotificationResponseDto> {
-    const notification = await this.notificationsRepository.findOne({ where: { id } });
+    const notification = await this.notificationsRepository.findOne({
+      where: { id },
+    });
     if (!notification) {
       throw new NotFoundException(`Notification with id ${id} was not found`);
     }

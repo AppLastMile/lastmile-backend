@@ -20,8 +20,6 @@ export class AddAuctionBidMode1743292800000 implements MigrationInterface {
         DROP COLUMN "bid_mode"`,
     );
 
-    await queryRunner.query(
-      `DROP TYPE "public"."auctions_bid_mode_enum"`,
-    );
+    await queryRunner.query(`DROP TYPE "public"."auctions_bid_mode_enum"`);
   }
 }

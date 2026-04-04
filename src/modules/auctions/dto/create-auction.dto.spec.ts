@@ -90,7 +90,9 @@ describe('CreateAuctionDto — CA3 validation', () => {
     });
 
     it('passes validation when itemName is provided', async () => {
-      const errors = await validate(buildDto({ itemName: 'Generador portatil' }));
+      const errors = await validate(
+        buildDto({ itemName: 'Generador portatil' }),
+      );
       expect(errors).toHaveLength(0);
     });
   });

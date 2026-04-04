@@ -42,16 +42,12 @@ export class AuctionsController {
   }
 
   @Get(':id')
-  findOne(
-    @Param('id', ParseIntPipe) id: number,
-  ): Promise<AuctionResponseDto> {
+  findOne(@Param('id', ParseIntPipe) id: number): Promise<AuctionResponseDto> {
     return this.auctionsService.findOne(id);
   }
 
   @Get(':id/bids')
-  findBids(
-    @Param('id', ParseIntPipe) id: number,
-  ): Promise<AuctionBidDto[]> {
+  findBids(@Param('id', ParseIntPipe) id: number): Promise<AuctionBidDto[]> {
     return this.auctionsService.findBidsByAuction(id);
   }
 

@@ -37,7 +37,9 @@ export class CreateAuctionDto {
   @IsEnum(AuctionBidMode)
   bidMode?: AuctionBidMode;
 
-  @ValidateIf((o: CreateAuctionDto) => o.bidMode === AuctionBidMode.FIXED_INCREMENT)
+  @ValidateIf(
+    (o: CreateAuctionDto) => o.bidMode === AuctionBidMode.FIXED_INCREMENT,
+  )
   @IsNumber()
   @Min(1)
   bidIncrement?: number;

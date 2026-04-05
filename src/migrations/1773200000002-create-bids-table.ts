@@ -5,7 +5,7 @@ export class CreateBidsTable1773200000002 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      CREATE TABLE "bids" (
+      CREATE TABLE IF NOT EXISTS "bids" (
         "id" SERIAL NOT NULL,
         "auctionId" integer NOT NULL,
         "userId" integer NOT NULL,
@@ -16,7 +16,7 @@ export class CreateBidsTable1773200000002 implements MigrationInterface {
     `);
 
     await queryRunner.query(`
-      CREATE INDEX "idx_bids_auction_created_at"
+      CREATE INDEX IF NOT EXISTS "idx_bids_auction_created_at"
       ON "bids" ("auctionId", "createdAt")
     `);
   }

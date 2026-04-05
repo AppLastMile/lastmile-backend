@@ -6,7 +6,7 @@ export class ProductsAndAuctionProductFk1773200000001 implements MigrationInterf
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create products table
     await queryRunner.query(`
-      CREATE TABLE "products" (
+      CREATE TABLE IF NOT EXISTS "products" (
         "id" SERIAL NOT NULL,
         "name" character varying(150) NOT NULL,
         "description" text,
@@ -18,7 +18,7 @@ export class ProductsAndAuctionProductFk1773200000001 implements MigrationInterf
 
     // Add productId to auctions (required)
     await queryRunner.query(
-      `ALTER TABLE "auctions" ADD "productId" integer NOT NULL DEFAULT 0`,
+      `ALTER TABLE "auctions" ADD COLUMN IF NOT EXISTS "productId" integer NOT NULL DEFAULT 0`,
     );
     // Remove the temporary default now that column exists
     await queryRunner.query(
@@ -35,7 +35,7 @@ export class ProductsAndAuctionProductFk1773200000001 implements MigrationInterf
       `DROP INDEX IF EXISTS "idx_auctions_campaign_status_created_at"`,
     );
     await queryRunner.query(`
-      CREATE INDEX "idx_auctions_product_status_created_at"
+      CREATE INDEX IF NOT EXISTS "idx_auctions_product_status_created_at"
       ON "auctions" ("productId", "status", "createdAt")
     `);
   }

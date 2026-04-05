@@ -33,7 +33,7 @@ export class AuctionBiddingFields1773200000000 implements MigrationInterface {
         ) THEN
           ALTER TABLE "auctions" RENAME COLUMN "price" TO "initialPrice";
         END IF;
-      END
+      END;
       $$;
     `);
 

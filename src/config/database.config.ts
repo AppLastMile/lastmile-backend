@@ -20,5 +20,9 @@ export function getTypeOrmConfig(
         }),
     autoLoadEntities: true,
     synchronize: !isProduction,
+    migrations: isProduction
+      ? ['dist/migrations/*.js']
+      : ['src/migrations/*.ts'],
+    migrationsRun: isProduction,
   };
 }

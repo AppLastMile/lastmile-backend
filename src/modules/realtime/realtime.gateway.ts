@@ -422,6 +422,79 @@ export class RealtimeGateway
     }
   }
 
+  @SubscribeMessage('campaign.volunteers.subscribe')
+  async subscribeCampaignVolunteers(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: { campaignId?: number },
+  ): Promise<void> {
+    const campaignId = Number(payload?.campaignId);
+    if (!Number.isInteger(campaignId) || campaignId <= 0) {
+      this.emitSystemError(
+        client,
+        new BadRequestException('campaignId is invalid'),
+        'BAD_REQUEST',
+      );
+      return;
+    }
+
+    try {
+      const room = await this.roomAuthorizationService.validateAndNormalizeRoom(
+        `campaign:${campaignId}:volunteers:tracking`,
+        {
+          userId: client.data.userId,
+          role: client.data.role,
+        },
+      );
+
+      await client.join(room);
+      client.emit('system.joined', {
+        room,
+        serverTime: new Date().toISOString(),
+      });
+
+      // Query latest locations for the campaign and send a snapshot
+      const rows = await this.shipmentLocationsRepository
+        .createQueryBuilder('l')
+        .where('l.campaignId = :campaignId', { campaignId })
+        .orderBy('l.recordedAt', 'DESC')
+        .addOrderBy('l.id', 'DESC')
+        .take(500)
+        .getMany();
+
+      const shipments = await this.shipmentsRepository.find({
+        where: { campaignId },
+        select: { id: true, assignedVolunteerId: true },
+      });
+      const assignedMap = new Map<number, number | null>();
+      for (const s of shipments) assignedMap.set(s.id, s.assignedVolunteerId ?? null);
+
+      const latestMap = new Map<number, typeof rows[0]>();
+      for (const r of rows) {
+        if (!latestMap.has(r.shipmentId)) {
+          latestMap.set(r.shipmentId, r);
+        }
+      }
+
+      const snapshot = Array.from(latestMap.values()).map((r) => ({
+        shipmentId: r.shipmentId,
+        volunteerId: assignedMap.get(r.shipmentId) ?? r.updatedBy,
+        lat: r.lat,
+        lng: r.lng,
+        speed: r.speed ?? undefined,
+        heading: r.heading ?? undefined,
+        recordedAt: r.recordedAt.toISOString(),
+      }));
+
+      client.emit('campaign.volunteers.snapshot', {
+        campaignId,
+        data: snapshot,
+        serverTime: new Date().toISOString(),
+      });
+    } catch (error) {
+      this.emitSystemError(client, error, 'FORBIDDEN_ROOM');
+    }
+  }
+
   @SubscribeMessage('shipment.location.update')
   async shipmentLocationUpdate(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -464,7 +537,7 @@ export class RealtimeGateway
 
       const shipment = await this.shipmentsRepository.findOne({
         where: { id: shipmentId },
-        select: { id: true, campaignId: true },
+        select: { id: true, campaignId: true, assignedVolunteerId: true },
       });
       if (!shipment) {
         throw new BadRequestException('Shipment does not exist');
@@ -504,6 +577,25 @@ export class RealtimeGateway
           heading: row.heading,
           recordedAt: row.recordedAt.toISOString(),
         });
+
+      // Emit a campaign-level volunteer location update so organizers
+      // subscribed to the campaign volunteers room receive all volunteers' locations.
+      try {
+        const volunteerId = shipment.assignedVolunteerId ?? row.updatedBy;
+        this.server
+          .to(`campaign:${shipment.campaignId}:volunteers:tracking`)
+          .emit('volunteer.location.changed', {
+            shipmentId,
+            volunteerId,
+            lat,
+            lng,
+            speed: row.speed,
+            heading: row.heading,
+            recordedAt: row.recordedAt.toISOString(),
+          });
+      } catch (err) {
+        this.logger.warn(`failed to emit campaign volunteer location: ${err instanceof Error ? err.message : String(err)}`);
+      }
 
       client.emit('shipment.location.ack', {
         shipmentId,
@@ -646,6 +738,24 @@ export class RealtimeGateway
         heading: event.heading,
         recordedAt: event.recordedAt.toISOString(),
       });
+
+    // Also emit a campaign-level volunteer location update for organizers
+    try {
+      const volunteerId = event.updatedBy;
+      this.server
+        .to(`campaign:${event.campaignId}:volunteers:tracking`)
+        .emit('volunteer.location.changed', {
+          shipmentId: event.shipmentId,
+          volunteerId,
+          lat: event.lat,
+          lng: event.lng,
+          speed: event.speed,
+          heading: event.heading,
+          recordedAt: event.recordedAt.toISOString(),
+        });
+    } catch (err) {
+      this.logger.warn(`failed to emit campaign volunteer location (event): ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   @OnEvent('auction.created')

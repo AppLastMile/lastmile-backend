@@ -3,6 +3,7 @@ import {
   MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
@@ -18,6 +19,8 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Repository } from 'typeorm';
 import { Server, Socket } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { createClient } from 'redis';
 import { Message } from '../chat/entities/message.entity';
 import { Campaign } from '../campaigns/entities/campaign.entity';
 import { User, UserRole } from '../users/entities/user.entity';
@@ -92,7 +95,7 @@ const isAllowedCorsOrigin = (origin?: string): boolean => {
   },
 })
 export class RealtimeGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
 {
   @WebSocketServer()
   server!: Server;
@@ -114,6 +117,21 @@ export class RealtimeGateway
     private readonly roomAuthorizationService: RoomAuthorizationService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
+
+  async afterInit(server: Server): Promise<void> {
+    if (process.env.REDIS_URL) {
+      try {
+        const pubClient = createClient({ url: process.env.REDIS_URL });
+        const subClient = pubClient.duplicate();
+        await pubClient.connect();
+        await subClient.connect();
+        server.adapter(createAdapter(pubClient, subClient));
+        this.logger.log('Socket.IO Redis adapter configured');
+      } catch (err) {
+        this.logger.warn(`Failed to configure Redis adapter: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
 
   async handleConnection(client: Socket): Promise<void> {
     const socket = client as AuthenticatedSocket;
@@ -292,6 +310,14 @@ export class RealtimeGateway
           message: text,
         }),
       );
+
+      // emitir evento interno para que NotificationsService y otros listeners se enteren
+      const sentEvent: MessageSentEvent = {
+        messageId: created.id,
+        campaignId,
+        userId: resolvedAuthor.id,
+      };
+      this.eventEmitter.emit('message.sent', sentEvent);
 
       this.logger.log(
         `chat.send ok user=${resolvedAuthor.id} campaign=${campaignId} messageId=${created.id}`,

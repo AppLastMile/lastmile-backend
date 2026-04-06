@@ -46,6 +46,8 @@
     "rxjs": "^7.8.1",
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.28"
+    ,"@socket.io/redis-adapter": "8.3.0",
+    "redis": "5.11.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

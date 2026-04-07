@@ -22,6 +22,15 @@ export class RoomAuthorizationService {
     room: string,
     user: AuthUser,
   ): Promise<string> {
+    if (room === 'volunteers:locations' || room === 'volunteers:tracking') {
+      if (user.role !== UserRole.ORGANIZER) {
+        throw new ForbiddenException(
+          'Only organizers are allowed to subscribe to volunteers tracking',
+        );
+      }
+      return room;
+    }
+
     const campaignChat = room.match(/^campaign:(\d+):chat$/);
     if (campaignChat) {
       await this.ensureCampaignVisible(Number(campaignChat[1]), user);

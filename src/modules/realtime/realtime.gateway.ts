@@ -10,9 +10,7 @@ import {
 } from '@nestjs/websockets';
 import {
   BadRequestException,
-  ForbiddenException,
   Logger,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { OnEvent } from '@nestjs/event-emitter';
@@ -39,10 +37,18 @@ import type { ShipmentStatusChangedEvent } from '../../events/shipment-status-ch
 import type { MessageSentEvent } from '../../events/message-sent.event';
 import { RealtimeAuthService } from './services/realtime-auth.service';
 import { RoomAuthorizationService } from './services/room-authorization.service';
+import {
+  VolunteerDisconnectedDto,
+  VolunteerLocationDto,
+  VolunteerLocationService,
+  VolunteerLocationsSnapshotDto,
+} from './services/volunteer-location.service';
+import { VolunteerPresenceService } from './services/volunteer-presence.service';
 
 type AuthenticatedSocket = Socket & {
   data: {
     userId: number;
+    userName: string;
     role: string;
     rateLimit: Record<string, number[]>;
     isAuthenticated: boolean;
@@ -115,6 +121,8 @@ export class RealtimeGateway
     private readonly shipmentLocationsRepository: Repository<ShipmentLocationHistory>,
     private readonly realtimeAuthService: RealtimeAuthService,
     private readonly roomAuthorizationService: RoomAuthorizationService,
+    private readonly volunteerPresenceService: VolunteerPresenceService,
+    private readonly volunteerLocationService: VolunteerLocationService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
@@ -136,50 +144,81 @@ export class RealtimeGateway
   async handleConnection(client: Socket): Promise<void> {
     const socket = client as AuthenticatedSocket;
 
+    const token = this.tryExtractToken(client);
+    if (!token) {
+      client.emit('system.error', {
+        code: 'AUTH_REQUIRED',
+        message: 'Authentication token is required',
+      });
+      client.disconnect(true);
+      return;
+    }
+
     try {
-      const token = this.tryExtractToken(client);
+      const authUser = this.realtimeAuthService.verifyToken(token);
+      const user = await this.usersRepository.findOne({
+        where: { id: authUser.userId },
+        select: { id: true, name: true, role: true },
+      });
 
-      if (!token) {
-        const anonymousUser = this.resolveAnonymousUser(client);
-        socket.data.userId = anonymousUser.userId;
-        socket.data.role = anonymousUser.role;
-        socket.data.rateLimit = {};
-        socket.data.isAuthenticated = false;
-
-        this.logger.warn(
-          `WS connected in anonymous test mode user=${anonymousUser.userId} socket=${client.id}`,
-        );
-        return;
+      if (!user) {
+        throw new BadRequestException('User not found');
       }
 
-      const authUser = this.realtimeAuthService.verifyToken(token);
-
       socket.data.userId = authUser.userId;
-      socket.data.role = authUser.role;
+      socket.data.userName = user.name;
+      socket.data.role = user.role;
       socket.data.rateLimit = {};
       socket.data.isAuthenticated = true;
 
-      // Ensure per-user notifications can be delivered without extra join calls.
+      this.volunteerPresenceService.registerConnection(
+        client.id,
+        user.id,
+        user.role,
+      );
+
       await socket.join(`user:${authUser.userId}`);
 
       this.logger.log(
         `WS connected user=${authUser.userId} socket=${client.id}`,
       );
     } catch (error) {
-      const anonymousUser = this.resolveAnonymousUser(client);
-      socket.data.userId = anonymousUser.userId;
-      socket.data.role = anonymousUser.role;
-      socket.data.rateLimit = {};
-      socket.data.isAuthenticated = false;
-
       const reason = error instanceof Error ? error.message : 'unknown';
       this.logger.warn(
-        `WS auth bypassed in test mode user=${anonymousUser.userId} socket=${client.id} reason=${reason}`,
+        `WS auth rejected socket=${client.id} reason=${reason}`,
       );
+      client.emit('system.error', {
+        code: 'AUTH_INVALID',
+        message: 'Invalid authentication token',
+      });
+      client.disconnect(true);
     }
   }
 
   handleDisconnect(client: Socket): void {
+    const disconnected = this.volunteerPresenceService.unregisterConnection(
+      client.id,
+    );
+
+    if (
+      disconnected &&
+      disconnected.role === UserRole.VOLUNTEER &&
+      !disconnected.stillConnected
+    ) {
+      this.volunteerLocationService.removeLocation(disconnected.userId);
+
+      const payload: VolunteerDisconnectedDto = {
+        volunteerId: disconnected.userId,
+      };
+      this.server
+        .to('volunteers:locations')
+        .emit('volunteer.disconnected', payload);
+      this.server.to('volunteers:tracking').emit('volunteer.offline', payload);
+      this.server
+        .to('volunteers:tracking')
+        .emit('volunteer.disconnected', payload);
+    }
+
     this.logger.log(`WS disconnected socket=${client.id}`);
   }
 
@@ -208,6 +247,21 @@ export class RealtimeGateway
         room: normalizedRoom,
         serverTime: new Date().toISOString(),
       });
+
+      if (
+        normalizedRoom === 'volunteers:locations' ||
+        normalizedRoom === 'volunteers:tracking'
+      ) {
+        this.emitGlobalVolunteersSnapshot(client);
+      }
+
+      const campaignVolunteers = normalizedRoom.match(
+        /^campaign:(\d+):volunteers:tracking$/,
+      );
+      if (campaignVolunteers) {
+        const campaignId = Number(campaignVolunteers[1]);
+        this.emitCampaignVolunteersSnapshot(client, campaignId);
+      }
 
       const isChatRoom = normalizedRoom.includes(':chat');
       if (isChatRoom && client.data.isAuthenticated) {
@@ -264,6 +318,7 @@ export class RealtimeGateway
     @MessageBody() payload: { campaignId?: number; message?: string },
   ): Promise<void> {
     try {
+      this.ensureAuthenticated(client);
       this.enforceRateLimit(client, 'chat.send', 5, 10_000);
 
       const campaignId = Number(payload?.campaignId);
@@ -299,14 +354,14 @@ export class RealtimeGateway
         where: { id: client.data.userId },
         select: { id: true, name: true },
       });
-
-      const resolvedAuthor =
-        author ?? (await this.ensureAnonymousAuthor(client));
+      if (!author) {
+        throw new BadRequestException('User does not exist');
+      }
 
       const created = await this.messagesRepository.save(
         this.messagesRepository.create({
           campaignId,
-          userId: resolvedAuthor.id,
+          userId: author.id,
           message: text,
         }),
       );
@@ -315,12 +370,12 @@ export class RealtimeGateway
       const sentEvent: MessageSentEvent = {
         messageId: created.id,
         campaignId,
-        userId: resolvedAuthor.id,
+        userId: author.id,
       };
       this.eventEmitter.emit('message.sent', sentEvent);
 
       this.logger.log(
-        `chat.send ok user=${resolvedAuthor.id} campaign=${campaignId} messageId=${created.id}`,
+        `chat.send ok user=${author.id} campaign=${campaignId} messageId=${created.id}`,
       );
 
       this.server
@@ -328,8 +383,8 @@ export class RealtimeGateway
         .emit('chat.message.created', {
           id: created.id,
           campaignId,
-          authorId: resolvedAuthor.id,
-          authorName: resolvedAuthor.name,
+          authorId: author.id,
+          authorName: author.name,
           message: created.message,
           createdAt: created.createdAt.toISOString(),
         });
@@ -452,46 +507,115 @@ export class RealtimeGateway
         serverTime: new Date().toISOString(),
       });
 
-      // Query latest locations for the campaign and send a snapshot
-      const rows = await this.shipmentLocationsRepository
-        .createQueryBuilder('l')
-        .where('l.campaignId = :campaignId', { campaignId })
-        .orderBy('l.recordedAt', 'DESC')
-        .addOrderBy('l.id', 'DESC')
-        .take(500)
-        .getMany();
+      this.emitCampaignVolunteersSnapshot(client, campaignId);
+    } catch (error) {
+      this.emitSystemError(client, error, 'FORBIDDEN_ROOM');
+    }
+  }
 
-      const shipments = await this.shipmentsRepository.find({
-        where: { campaignId },
-        select: { id: true, assignedVolunteerId: true },
-      });
-      const assignedMap = new Map<number, number | null>();
-      for (const s of shipments) assignedMap.set(s.id, s.assignedVolunteerId ?? null);
+  @SubscribeMessage('volunteer.location.update')
+  async volunteerLocationUpdate(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody()
+    payload: {
+      lat?: number;
+      lng?: number;
+      recordedAt?: string;
+      campaignId?: number;
+      shipmentId?: number;
+    },
+  ): Promise<void> {
+    try {
+      this.ensureAuthenticated(client);
+      this.ensureVolunteerRole(client);
+      this.enforceRateLimit(client, 'volunteer.location.update', 1, 2000);
 
-      const latestMap = new Map<number, typeof rows[0]>();
-      for (const r of rows) {
-        if (!latestMap.has(r.shipmentId)) {
-          latestMap.set(r.shipmentId, r);
+      const lat = Number(payload?.lat);
+      const lng = Number(payload?.lng);
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        throw new BadRequestException('lat/lng are required');
+      }
+
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        throw new BadRequestException('lat/lng are out of range');
+      }
+
+      let campaignId: number | undefined = undefined;
+      let shipmentId: number | undefined = undefined;
+
+      if (payload?.campaignId !== undefined) {
+        campaignId = Number(payload.campaignId);
+        if (!Number.isInteger(campaignId) || campaignId <= 0) {
+          throw new BadRequestException('campaignId is invalid');
         }
       }
 
-      const snapshot = Array.from(latestMap.values()).map((r) => ({
-        shipmentId: r.shipmentId,
-        volunteerId: assignedMap.get(r.shipmentId) ?? r.updatedBy,
-        lat: r.lat,
-        lng: r.lng,
-        speed: r.speed ?? undefined,
-        heading: r.heading ?? undefined,
-        recordedAt: r.recordedAt.toISOString(),
-      }));
+      if (payload?.shipmentId !== undefined) {
+        shipmentId = Number(payload.shipmentId);
+        if (!Number.isInteger(shipmentId) || shipmentId <= 0) {
+          throw new BadRequestException('shipmentId is invalid');
+        }
 
-      client.emit('campaign.volunteers.snapshot', {
+        const shipment = await this.shipmentsRepository.findOne({
+          where: { id: shipmentId },
+          select: { id: true, campaignId: true, assignedVolunteerId: true },
+        });
+        if (!shipment) {
+          throw new BadRequestException('Shipment does not exist');
+        }
+
+        if (shipment.assignedVolunteerId !== client.data.userId) {
+          throw new BadRequestException(
+            'Volunteer is not assigned to the shipment',
+          );
+        }
+
+        campaignId = campaignId ?? shipment.campaignId;
+
+        const locationRow = this.shipmentLocationsRepository.create({
+          shipmentId,
+          campaignId: shipment.campaignId,
+          lat,
+          lng,
+          speed: null,
+          heading: null,
+          recordedAt: payload?.recordedAt ? new Date(payload.recordedAt) : new Date(),
+          updatedBy: client.data.userId,
+        });
+
+        if (Number.isNaN(locationRow.recordedAt.getTime())) {
+          throw new BadRequestException('recordedAt is invalid');
+        }
+
+        await this.shipmentLocationsRepository.save(locationRow);
+      }
+
+      const recordedAt = payload?.recordedAt
+        ? new Date(payload.recordedAt)
+        : new Date();
+      if (Number.isNaN(recordedAt.getTime())) {
+        throw new BadRequestException('recordedAt is invalid');
+      }
+
+      const location: VolunteerLocationDto = {
+        volunteerId: client.data.userId,
+        lat,
+        lng,
+        recordedAt: recordedAt.toISOString(),
+        name: client.data.userName,
         campaignId,
-        data: snapshot,
-        serverTime: new Date().toISOString(),
+        shipmentId,
+      };
+
+      this.volunteerLocationService.upsertLocation(location);
+      this.emitVolunteerLocationUpdates(location);
+      client.emit('volunteer.location.ack', {
+        volunteerId: location.volunteerId,
+        recordedAt: location.recordedAt,
       });
     } catch (error) {
-      this.emitSystemError(client, error, 'FORBIDDEN_ROOM');
+      this.emitSystemError(client, error, 'VOLUNTEER_LOCATION_ERROR');
     }
   }
 
@@ -509,6 +633,8 @@ export class RealtimeGateway
     },
   ): Promise<void> {
     try {
+      this.ensureAuthenticated(client);
+      this.ensureVolunteerRole(client);
       this.enforceRateLimit(client, 'shipment.location.update', 1, 2000);
 
       const shipmentId = Number(payload?.shipmentId);
@@ -543,6 +669,12 @@ export class RealtimeGateway
         throw new BadRequestException('Shipment does not exist');
       }
 
+      if (shipment.assignedVolunteerId !== client.data.userId) {
+        throw new BadRequestException(
+          'Volunteer is not assigned to the shipment',
+        );
+      }
+
       const recordedAt = payload?.recordedAt
         ? new Date(payload.recordedAt)
         : new Date();
@@ -567,6 +699,18 @@ export class RealtimeGateway
 
       await this.shipmentLocationsRepository.save(row);
 
+      const volunteerLocation: VolunteerLocationDto = {
+        volunteerId: client.data.userId,
+        lat,
+        lng,
+        recordedAt: row.recordedAt.toISOString(),
+        name: client.data.userName,
+        campaignId: shipment.campaignId,
+        shipmentId,
+      };
+      this.volunteerLocationService.upsertLocation(volunteerLocation);
+      this.emitVolunteerLocationUpdates(volunteerLocation);
+
       this.server
         .to(`shipment:${shipmentId}:tracking`)
         .emit('shipment.location.changed', {
@@ -577,25 +721,6 @@ export class RealtimeGateway
           heading: row.heading,
           recordedAt: row.recordedAt.toISOString(),
         });
-
-      // Emit a campaign-level volunteer location update so organizers
-      // subscribed to the campaign volunteers room receive all volunteers' locations.
-      try {
-        const volunteerId = shipment.assignedVolunteerId ?? row.updatedBy;
-        this.server
-          .to(`campaign:${shipment.campaignId}:volunteers:tracking`)
-          .emit('volunteer.location.changed', {
-            shipmentId,
-            volunteerId,
-            lat,
-            lng,
-            speed: row.speed,
-            heading: row.heading,
-            recordedAt: row.recordedAt.toISOString(),
-          });
-      } catch (err) {
-        this.logger.warn(`failed to emit campaign volunteer location: ${err instanceof Error ? err.message : String(err)}`);
-      }
 
       client.emit('shipment.location.ack', {
         shipmentId,
@@ -739,23 +864,16 @@ export class RealtimeGateway
         recordedAt: event.recordedAt.toISOString(),
       });
 
-    // Also emit a campaign-level volunteer location update for organizers
-    try {
-      const volunteerId = event.updatedBy;
-      this.server
-        .to(`campaign:${event.campaignId}:volunteers:tracking`)
-        .emit('volunteer.location.changed', {
-          shipmentId: event.shipmentId,
-          volunteerId,
-          lat: event.lat,
-          lng: event.lng,
-          speed: event.speed,
-          heading: event.heading,
-          recordedAt: event.recordedAt.toISOString(),
-        });
-    } catch (err) {
-      this.logger.warn(`failed to emit campaign volunteer location (event): ${err instanceof Error ? err.message : String(err)}`);
-    }
+    const location: VolunteerLocationDto = {
+      volunteerId: event.updatedBy,
+      lat: event.lat,
+      lng: event.lng,
+      recordedAt: event.recordedAt.toISOString(),
+      campaignId: event.campaignId,
+      shipmentId: event.shipmentId,
+    };
+    this.volunteerLocationService.upsertLocation(location);
+    this.emitVolunteerLocationUpdates(location);
   }
 
   @OnEvent('auction.created')
@@ -851,29 +969,81 @@ export class RealtimeGateway
     return null;
   }
 
-  private resolveAnonymousUser(client: Socket): {
-    userId: number;
-    role: string;
-  } {
-    const authData =
-      (client.handshake.auth as
-        | { userId?: unknown; role?: unknown }
-        | undefined) ?? {};
-    const queryData =
-      (client.handshake.query as { userId?: unknown; role?: unknown }) ?? {};
+  private emitGlobalVolunteersSnapshot(client: AuthenticatedSocket): void {
+    const snapshot: VolunteerLocationsSnapshotDto = {
+      volunteers: this.volunteerLocationService.getAllLocations(),
+    };
 
-    const rawUserId = authData.userId ?? queryData.userId;
-    const parsedUserId = Number(rawUserId);
-    const userId =
-      Number.isInteger(parsedUserId) && parsedUserId > 0 ? parsedUserId : 1;
+    client.emit('volunteers.locations.snapshot', snapshot);
+    client.emit('volunteer.location.snapshot', snapshot);
+  }
 
-    const rawRole = authData.role ?? queryData.role;
-    const role =
-      typeof rawRole === 'string' && rawRole.trim().length > 0
-        ? rawRole.trim()
-        : 'donor';
+  private emitCampaignVolunteersSnapshot(
+    client: AuthenticatedSocket,
+    campaignId: number,
+  ): void {
+    const volunteers = this.volunteerLocationService.getCampaignLocations(
+      campaignId,
+    );
+    const snapshot: VolunteerLocationsSnapshotDto = {
+      volunteers,
+    };
 
-    return { userId, role };
+    client.emit('campaign.volunteers.snapshot', {
+      campaignId,
+      volunteers,
+    });
+
+    // Alias transitorio para compatibilidad con clientes antiguos.
+    client.emit('volunteers.locations.snapshot', snapshot);
+  }
+
+  private emitVolunteerLocationUpdates(location: VolunteerLocationDto): void {
+    this.server
+      .to('volunteers:locations')
+      .emit('volunteer.location.updated', location);
+    this.server
+      .to('volunteers:locations')
+      .emit('volunteer.location.changed', location);
+    this.server
+      .to('volunteers:locations')
+      .emit('volunteer.location.update', location);
+
+    this.server
+      .to('volunteers:tracking')
+      .emit('volunteer.location.updated', location);
+    this.server
+      .to('volunteers:tracking')
+      .emit('volunteer.location.changed', location);
+    this.server
+      .to('volunteers:tracking')
+      .emit('volunteer.location.update', location);
+
+    if (location.campaignId) {
+      this.server
+        .to(`campaign:${location.campaignId}:volunteers:tracking`)
+        .emit('volunteer.location.updated', location);
+      this.server
+        .to(`campaign:${location.campaignId}:volunteers:tracking`)
+        .emit('volunteer.location.changed', location);
+      this.server
+        .to(`campaign:${location.campaignId}:volunteers:tracking`)
+        .emit('volunteer.location.update', location);
+    }
+  }
+
+  private ensureAuthenticated(client: AuthenticatedSocket): void {
+    if (!client.data.isAuthenticated) {
+      throw new BadRequestException('Authenticated user is required');
+    }
+  }
+
+  private ensureVolunteerRole(client: AuthenticatedSocket): void {
+    if (client.data.role !== UserRole.VOLUNTEER) {
+      throw new BadRequestException(
+        'Only volunteers can report location updates',
+      );
+    }
   }
 
   private emitSystemError(client: Socket, error: unknown, code: string): void {
@@ -901,51 +1071,5 @@ export class RealtimeGateway
 
     filtered.push(now);
     client.data.rateLimit[eventName] = filtered;
-  }
-
-  private async ensureAnonymousAuthor(
-    client: AuthenticatedSocket,
-  ): Promise<{ id: number; name: string }> {
-    if (client.data.isAuthenticated) {
-      throw new ForbiddenException('User does not exist');
-    }
-
-    const role = this.mapRole(client.data.role);
-    const userId = client.data.userId;
-    const fallbackEmail = `anon-${userId}@realtime.local`;
-
-    const existingByEmail = await this.usersRepository.findOne({
-      where: { email: fallbackEmail },
-      select: { id: true, name: true },
-    });
-
-    if (existingByEmail) {
-      client.data.userId = existingByEmail.id;
-      return existingByEmail;
-    }
-
-    const created = await this.usersRepository.save(
-      this.usersRepository.create({
-        name: `Anon ${userId}`,
-        email: fallbackEmail,
-        password: 'temporary-anon-password',
-        role,
-      }),
-    );
-
-    client.data.userId = created.id;
-    return { id: created.id, name: created.name };
-  }
-
-  private mapRole(role: string): UserRole {
-    if (role === UserRole.ORGANIZER) {
-      return UserRole.ORGANIZER;
-    }
-
-    if (role === UserRole.VOLUNTEER) {
-      return UserRole.VOLUNTEER;
-    }
-
-    return UserRole.DONOR;
   }
 }

@@ -3,21 +3,25 @@ import {
   MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
 import {
   BadRequestException,
-  ForbiddenException,
   Logger,
-  UnauthorizedException,
 } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { InjectRepository } from '@nestjs/typeorm';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Server, Socket } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { createClient } from 'redis';
+import { randomUUID } from 'crypto';
 import { Message } from '../chat/entities/message.entity';
 import { Campaign } from '../campaigns/entities/campaign.entity';
 import { User, UserRole } from '../users/entities/user.entity';
@@ -36,10 +40,19 @@ import type { ShipmentStatusChangedEvent } from '../../events/shipment-status-ch
 import type { MessageSentEvent } from '../../events/message-sent.event';
 import { RealtimeAuthService } from './services/realtime-auth.service';
 import { RoomAuthorizationService } from './services/room-authorization.service';
+import {
+  VolunteerDisconnectedDto,
+  VolunteerLocationDto,
+  VolunteerLocationService,
+  VolunteerLocationsSnapshotDto,
+} from './services/volunteer-location.service';
+import { VolunteerPresenceService } from './services/volunteer-presence.service';
+import { VolunteerLocationWsDto } from './dto/volunteer-location-ws.dto';
 
 type AuthenticatedSocket = Socket & {
   data: {
     userId: number;
+    userName: string;
     role: string;
     rateLimit: Record<string, number[]>;
     isAuthenticated: boolean;
@@ -92,12 +105,14 @@ const isAllowedCorsOrigin = (origin?: string): boolean => {
   },
 })
 export class RealtimeGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
 {
   @WebSocketServer()
   server!: Server;
 
   private readonly logger = new Logger(RealtimeGateway.name);
+  private readonly staleThresholdMs = 60_000;
+  private readonly maxImpliedSpeedMetersPerSecond = 70;
 
   constructor(
     @InjectRepository(Message)
@@ -112,56 +127,110 @@ export class RealtimeGateway
     private readonly shipmentLocationsRepository: Repository<ShipmentLocationHistory>,
     private readonly realtimeAuthService: RealtimeAuthService,
     private readonly roomAuthorizationService: RoomAuthorizationService,
+    private readonly volunteerPresenceService: VolunteerPresenceService,
+    private readonly volunteerLocationService: VolunteerLocationService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
+
+  async afterInit(server: Server): Promise<void> {
+    if (process.env.REDIS_URL) {
+      try {
+        const pubClient = createClient({ url: process.env.REDIS_URL });
+        const subClient = pubClient.duplicate();
+        await pubClient.connect();
+        await subClient.connect();
+        server.adapter(createAdapter(pubClient, subClient));
+        this.logger.log('Socket.IO Redis adapter configured');
+      } catch (err) {
+        this.logger.warn(`Failed to configure Redis adapter: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
 
   async handleConnection(client: Socket): Promise<void> {
     const socket = client as AuthenticatedSocket;
 
+    const token = this.tryExtractToken(client);
+    if (!token) {
+      client.emit('system.error', {
+        code: 'AUTH_REQUIRED',
+        message: 'Authentication token is required',
+      });
+      client.disconnect(true);
+      return;
+    }
+
     try {
-      const token = this.tryExtractToken(client);
+      const authUser = this.realtimeAuthService.verifyToken(token);
+      const user = await this.usersRepository.findOne({
+        where: { id: authUser.userId },
+        select: { id: true, name: true, role: true },
+      });
 
-      if (!token) {
-        const anonymousUser = this.resolveAnonymousUser(client);
-        socket.data.userId = anonymousUser.userId;
-        socket.data.role = anonymousUser.role;
-        socket.data.rateLimit = {};
-        socket.data.isAuthenticated = false;
-
-        this.logger.warn(
-          `WS connected in anonymous test mode user=${anonymousUser.userId} socket=${client.id}`,
-        );
-        return;
+      if (!user) {
+        throw new BadRequestException('User not found');
       }
 
-      const authUser = this.realtimeAuthService.verifyToken(token);
-
       socket.data.userId = authUser.userId;
-      socket.data.role = authUser.role;
+      socket.data.userName = user.name;
+      socket.data.role = user.role;
       socket.data.rateLimit = {};
       socket.data.isAuthenticated = true;
 
-      // Ensure per-user notifications can be delivered without extra join calls.
+      this.volunteerPresenceService.registerConnection(
+        client.id,
+        user.id,
+        user.role,
+      );
+
       await socket.join(`user:${authUser.userId}`);
+
+      if (user.role === UserRole.ORGANIZER) {
+        await socket.join('volunteers:locations');
+        await socket.join('volunteers:tracking');
+        this.emitGlobalVolunteersSnapshot(socket);
+      }
 
       this.logger.log(
         `WS connected user=${authUser.userId} socket=${client.id}`,
       );
     } catch (error) {
-      const anonymousUser = this.resolveAnonymousUser(client);
-      socket.data.userId = anonymousUser.userId;
-      socket.data.role = anonymousUser.role;
-      socket.data.rateLimit = {};
-      socket.data.isAuthenticated = false;
-
       const reason = error instanceof Error ? error.message : 'unknown';
       this.logger.warn(
-        `WS auth bypassed in test mode user=${anonymousUser.userId} socket=${client.id} reason=${reason}`,
+        `WS auth rejected socket=${client.id} reason=${reason}`,
       );
+      client.emit('system.error', {
+        code: 'AUTH_INVALID',
+        message: 'Invalid authentication token',
+      });
+      client.disconnect(true);
     }
   }
 
   handleDisconnect(client: Socket): void {
+    const disconnected = this.volunteerPresenceService.unregisterConnection(
+      client.id,
+    );
+
+    if (
+      disconnected &&
+      disconnected.role === UserRole.VOLUNTEER &&
+      !disconnected.stillConnected
+    ) {
+      this.volunteerLocationService.removeLocation(disconnected.userId);
+
+      const payload: VolunteerDisconnectedDto = {
+        volunteerId: disconnected.userId,
+      };
+      this.server
+        .to('volunteers:locations')
+        .emit('volunteer.disconnected', payload);
+      this.server.to('volunteers:tracking').emit('volunteer.offline', payload);
+      this.server
+        .to('volunteers:tracking')
+        .emit('volunteer.disconnected', payload);
+    }
+
     this.logger.log(`WS disconnected socket=${client.id}`);
   }
 
@@ -190,6 +259,21 @@ export class RealtimeGateway
         room: normalizedRoom,
         serverTime: new Date().toISOString(),
       });
+
+      if (
+        normalizedRoom === 'volunteers:locations' ||
+        normalizedRoom === 'volunteers:tracking'
+      ) {
+        this.emitGlobalVolunteersSnapshot(client);
+      }
+
+      const campaignVolunteers = normalizedRoom.match(
+        /^campaign:(\d+):volunteers:tracking$/,
+      );
+      if (campaignVolunteers) {
+        const campaignId = Number(campaignVolunteers[1]);
+        this.emitCampaignVolunteersSnapshot(client, campaignId);
+      }
 
       const isChatRoom = normalizedRoom.includes(':chat');
       if (isChatRoom && client.data.isAuthenticated) {
@@ -246,6 +330,7 @@ export class RealtimeGateway
     @MessageBody() payload: { campaignId?: number; message?: string },
   ): Promise<void> {
     try {
+      this.ensureAuthenticated(client);
       this.enforceRateLimit(client, 'chat.send', 5, 10_000);
 
       const campaignId = Number(payload?.campaignId);
@@ -281,20 +366,28 @@ export class RealtimeGateway
         where: { id: client.data.userId },
         select: { id: true, name: true },
       });
-
-      const resolvedAuthor =
-        author ?? (await this.ensureAnonymousAuthor(client));
+      if (!author) {
+        throw new BadRequestException('User does not exist');
+      }
 
       const created = await this.messagesRepository.save(
         this.messagesRepository.create({
           campaignId,
-          userId: resolvedAuthor.id,
+          userId: author.id,
           message: text,
         }),
       );
 
+      // emitir evento interno para que NotificationsService y otros listeners se enteren
+      const sentEvent: MessageSentEvent = {
+        messageId: created.id,
+        campaignId,
+        userId: author.id,
+      };
+      this.eventEmitter.emit('message.sent', sentEvent);
+
       this.logger.log(
-        `chat.send ok user=${resolvedAuthor.id} campaign=${campaignId} messageId=${created.id}`,
+        `chat.send ok user=${author.id} campaign=${campaignId} messageId=${created.id}`,
       );
 
       this.server
@@ -302,8 +395,8 @@ export class RealtimeGateway
         .emit('chat.message.created', {
           id: created.id,
           campaignId,
-          authorId: resolvedAuthor.id,
-          authorName: resolvedAuthor.name,
+          authorId: author.id,
+          authorName: author.name,
           message: created.message,
           createdAt: created.createdAt.toISOString(),
         });
@@ -396,6 +489,225 @@ export class RealtimeGateway
     }
   }
 
+  @SubscribeMessage('campaign.volunteers.subscribe')
+  async subscribeCampaignVolunteers(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() payload: { campaignId?: number },
+  ): Promise<void> {
+    const campaignId = Number(payload?.campaignId);
+    if (!Number.isInteger(campaignId) || campaignId <= 0) {
+      this.emitSystemError(
+        client,
+        new BadRequestException('campaignId is invalid'),
+        'BAD_REQUEST',
+      );
+      return;
+    }
+
+    try {
+      const room = await this.roomAuthorizationService.validateAndNormalizeRoom(
+        `campaign:${campaignId}:volunteers:tracking`,
+        {
+          userId: client.data.userId,
+          role: client.data.role,
+        },
+      );
+
+      await client.join(room);
+      client.emit('system.joined', {
+        room,
+        serverTime: new Date().toISOString(),
+      });
+
+      this.emitCampaignVolunteersSnapshot(client, campaignId);
+    } catch (error) {
+      this.emitSystemError(client, error, 'FORBIDDEN_ROOM');
+    }
+  }
+
+  @SubscribeMessage('volunteers.locations.snapshot.request')
+  handleVolunteerSnapshotRequest(
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ): void {
+    if (client.data.role === UserRole.ORGANIZER) {
+      this.emitGlobalVolunteersSnapshot(client);
+    }
+  }
+
+  @SubscribeMessage('volunteer.location.update')
+  async volunteerLocationUpdate(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody()
+    payload: {
+      lat?: number;
+      lng?: number;
+      latitude?: number;
+      longitude?: number;
+      coords?: {
+        lat?: number;
+        lng?: number;
+        latitude?: number;
+        longitude?: number;
+      };
+      recordedAt?: string | number;
+      campaignId?: number;
+      shipmentId?: number;
+      correlationId?: string;
+    },
+  ): Promise<void> {
+    try {
+      const serverReceivedAt = new Date();
+      const correlationId = this.resolveCorrelationId(payload?.correlationId);
+
+      this.ensureAuthenticated(client);
+      this.ensureVolunteerRole(client);
+      this.enforceRateLimit(client, 'volunteer.location.update', 1, 2000);
+
+      const linkedPresence = this.volunteerPresenceService.getLinkedUser(
+        client.id,
+      );
+      if (linkedPresence && linkedPresence.userId !== client.data.userId) {
+        this.logger.warn(
+          `[tracking] correlationId=${correlationId} socket-user mismatch socket=${client.id} socketUser=${linkedPresence.userId} requestUser=${client.data.userId}`,
+        );
+      }
+
+      const extracted = this.extractAndNormalizeCoordinates(payload);
+      const lat = extracted.lat;
+      const lng = extracted.lng;
+      const normalizedCoordinates = extracted.normalizedCoordinates;
+      const recordedAt = this.parseRecordedAt(payload?.recordedAt);
+
+      const validatedPayload = this.validateVolunteerLocationDto({
+        lat,
+        lng,
+        recordedAt: recordedAt.toISOString(),
+        campaignId:
+          payload?.campaignId === undefined ? undefined : Number(payload.campaignId),
+        shipmentId:
+          payload?.shipmentId === undefined ? undefined : Number(payload.shipmentId),
+        correlationId,
+      });
+
+      const stale =
+        serverReceivedAt.getTime() - recordedAt.getTime() > this.staleThresholdMs;
+
+      this.logger.log(
+        `[tracking] received correlationId=${correlationId} userId=${client.data.userId} role=${client.data.role} lat=${lat} lng=${lng} recordedAt=${recordedAt.toISOString()} serverReceivedAt=${serverReceivedAt.toISOString()} normalized=${normalizedCoordinates} stale=${stale}`,
+      );
+
+      if (stale) {
+        this.logger.warn(
+          `[tracking] correlationId=${correlationId} stale location userId=${client.data.userId} ageMs=${serverReceivedAt.getTime() - recordedAt.getTime()}`,
+        );
+      }
+
+      const previousLocation = this.volunteerLocationService.getByVolunteerId(
+        client.data.userId,
+      );
+      if (
+        previousLocation &&
+        this.isImplausibleJump(previousLocation, {
+          lat,
+          lng,
+          recordedAt,
+        })
+      ) {
+        throw new BadRequestException(
+          'Location discarded due to implausible speed/jump',
+        );
+      }
+
+      let campaignId: number | undefined = undefined;
+      let shipmentId: number | undefined = undefined;
+
+      if (payload?.campaignId !== undefined) {
+        campaignId = validatedPayload.campaignId;
+      }
+
+      if (payload?.shipmentId !== undefined) {
+        shipmentId = validatedPayload.shipmentId;
+
+        const shipment = await this.shipmentsRepository.findOne({
+          where: { id: shipmentId },
+          select: { id: true, campaignId: true, assignedVolunteerId: true },
+        });
+        if (!shipment) {
+          throw new BadRequestException('Shipment does not exist');
+        }
+
+        if (shipment.assignedVolunteerId !== client.data.userId) {
+          throw new BadRequestException(
+            'Volunteer is not assigned to the shipment',
+          );
+        }
+
+        campaignId = campaignId ?? shipment.campaignId;
+
+        const locationRow = this.shipmentLocationsRepository.create({
+          shipmentId,
+          campaignId: shipment.campaignId,
+          lat,
+          lng,
+          speed: null,
+          heading: null,
+          recordedAt,
+          updatedBy: client.data.userId,
+        });
+
+        await this.shipmentLocationsRepository.save(locationRow);
+
+        this.logger.log(
+          `[tracking] saved correlationId=${correlationId} shipmentId=${shipmentId} userId=${client.data.userId} lat=${lat} lng=${lng}`,
+        );
+      }
+
+      if (!shipmentId || !campaignId) {
+        const inferred = await this.resolveVolunteerActiveShipment(
+          client.data.userId,
+        );
+        if (inferred) {
+          shipmentId = shipmentId ?? inferred.shipmentId;
+          campaignId = campaignId ?? inferred.campaignId;
+        }
+      }
+
+      const location: VolunteerLocationDto = {
+        volunteerId: client.data.userId,
+        lat,
+        lng,
+        recordedAt: recordedAt.toISOString(),
+        correlationId,
+        normalizedCoordinates,
+        stale,
+        serverReceivedAt: serverReceivedAt.toISOString(),
+        name: client.data.userName,
+        campaignId,
+        shipmentId,
+      };
+
+      this.volunteerLocationService.upsertLocation(location);
+      this.emitVolunteerLocationUpdates(location);
+
+      this.logger.log(
+        `[tracking] broadcast correlationId=${correlationId} userId=${client.data.userId} room=volunteers:locations lat=${lat} lng=${lng}`,
+      );
+
+      client.emit('volunteer.location.ack', {
+        correlationId,
+        volunteerId: location.volunteerId,
+        lat,
+        lng,
+        normalizedCoordinates,
+        stale,
+        recordedAt: location.recordedAt,
+        serverReceivedAt: serverReceivedAt.toISOString(),
+      });
+    } catch (error) {
+      this.emitSystemError(client, error, 'VOLUNTEER_LOCATION_ERROR');
+    }
+  }
+
   @SubscribeMessage('shipment.location.update')
   async shipmentLocationUpdate(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -404,28 +716,31 @@ export class RealtimeGateway
       shipmentId?: number;
       lat?: number;
       lng?: number;
+      latitude?: number;
+      longitude?: number;
+      coords?: {
+        lat?: number;
+        lng?: number;
+        latitude?: number;
+        longitude?: number;
+      };
       speed?: number;
       heading?: number;
-      recordedAt?: string;
+      recordedAt?: string | number;
     },
   ): Promise<void> {
     try {
+      this.ensureAuthenticated(client);
+      this.ensureVolunteerRole(client);
       this.enforceRateLimit(client, 'shipment.location.update', 1, 2000);
 
       const shipmentId = Number(payload?.shipmentId);
-      const lat = Number(payload?.lat);
-      const lng = Number(payload?.lng);
+      const extracted = this.extractAndNormalizeCoordinates(payload);
+      const lat = extracted.lat;
+      const lng = extracted.lng;
 
       if (!Number.isInteger(shipmentId) || shipmentId <= 0) {
         throw new BadRequestException('shipmentId is invalid');
-      }
-
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        throw new BadRequestException('lat/lng are required');
-      }
-
-      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-        throw new BadRequestException('lat/lng are out of range');
       }
 
       await this.roomAuthorizationService.validateAndNormalizeRoom(
@@ -438,18 +753,19 @@ export class RealtimeGateway
 
       const shipment = await this.shipmentsRepository.findOne({
         where: { id: shipmentId },
-        select: { id: true, campaignId: true },
+        select: { id: true, campaignId: true, assignedVolunteerId: true },
       });
       if (!shipment) {
         throw new BadRequestException('Shipment does not exist');
       }
 
-      const recordedAt = payload?.recordedAt
-        ? new Date(payload.recordedAt)
-        : new Date();
-      if (Number.isNaN(recordedAt.getTime())) {
-        throw new BadRequestException('recordedAt is invalid');
+      if (shipment.assignedVolunteerId !== client.data.userId) {
+        throw new BadRequestException(
+          'Volunteer is not assigned to the shipment',
+        );
       }
+
+      const recordedAt = this.parseRecordedAt(payload?.recordedAt);
 
       const row = this.shipmentLocationsRepository.create({
         shipmentId,
@@ -467,6 +783,18 @@ export class RealtimeGateway
       });
 
       await this.shipmentLocationsRepository.save(row);
+
+      const volunteerLocation: VolunteerLocationDto = {
+        volunteerId: client.data.userId,
+        lat,
+        lng,
+        recordedAt: row.recordedAt.toISOString(),
+        name: client.data.userName,
+        campaignId: shipment.campaignId,
+        shipmentId,
+      };
+      this.volunteerLocationService.upsertLocation(volunteerLocation);
+      this.emitVolunteerLocationUpdates(volunteerLocation);
 
       this.server
         .to(`shipment:${shipmentId}:tracking`)
@@ -620,6 +948,17 @@ export class RealtimeGateway
         heading: event.heading,
         recordedAt: event.recordedAt.toISOString(),
       });
+
+    const location: VolunteerLocationDto = {
+      volunteerId: event.updatedBy,
+      lat: event.lat,
+      lng: event.lng,
+      recordedAt: event.recordedAt.toISOString(),
+      campaignId: event.campaignId,
+      shipmentId: event.shipmentId,
+    };
+    this.volunteerLocationService.upsertLocation(location);
+    this.emitVolunteerLocationUpdates(location);
   }
 
   @OnEvent('auction.created')
@@ -715,29 +1054,327 @@ export class RealtimeGateway
     return null;
   }
 
-  private resolveAnonymousUser(client: Socket): {
-    userId: number;
-    role: string;
-  } {
-    const authData =
-      (client.handshake.auth as
-        | { userId?: unknown; role?: unknown }
-        | undefined) ?? {};
-    const queryData =
-      (client.handshake.query as { userId?: unknown; role?: unknown }) ?? {};
+  private extractAndNormalizeCoordinates(payload: {
+    lat?: number;
+    lng?: number;
+    latitude?: number;
+    longitude?: number;
+    coords?: {
+      lat?: number;
+      lng?: number;
+      latitude?: number;
+      longitude?: number;
+    };
+  }): { lat: number; lng: number; normalizedCoordinates: boolean } {
+    const rawLat =
+      payload?.lat ?? payload?.latitude ?? payload?.coords?.lat ?? payload?.coords?.latitude;
+    const rawLng =
+      payload?.lng ?? payload?.longitude ?? payload?.coords?.lng ?? payload?.coords?.longitude;
 
-    const rawUserId = authData.userId ?? queryData.userId;
-    const parsedUserId = Number(rawUserId);
-    const userId =
-      Number.isInteger(parsedUserId) && parsedUserId > 0 ? parsedUserId : 1;
+    const latCandidate = Number(rawLat);
+    const lngCandidate = Number(rawLng);
 
-    const rawRole = authData.role ?? queryData.role;
-    const role =
-      typeof rawRole === 'string' && rawRole.trim().length > 0
-        ? rawRole.trim()
-        : 'donor';
+    if (!Number.isFinite(latCandidate) || !Number.isFinite(lngCandidate)) {
+      throw new BadRequestException(
+        'Coordinates are required (lat/lng or latitude/longitude)',
+      );
+    }
 
-    return { userId, role };
+    const shouldSwap =
+      Math.abs(latCandidate) > 90 &&
+      Math.abs(latCandidate) <= 180 &&
+      Math.abs(lngCandidate) <= 90;
+
+    const lat = shouldSwap ? lngCandidate : latCandidate;
+    const lng = shouldSwap ? latCandidate : lngCandidate;
+
+    if (shouldSwap) {
+      this.logger.warn(
+        `[tracking] coordinates normalized by swap rawLat=${latCandidate} rawLng=${lngCandidate} finalLat=${lat} finalLng=${lng}`,
+      );
+    }
+
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      throw new BadRequestException('lat/lng are out of range');
+    }
+
+    return { lat, lng, normalizedCoordinates: shouldSwap };
+  }
+
+  private validateVolunteerLocationDto(payload: {
+    lat: number;
+    lng: number;
+    recordedAt?: string;
+    campaignId?: number;
+    shipmentId?: number;
+    correlationId?: string;
+  }): VolunteerLocationWsDto {
+    const dto = plainToInstance(VolunteerLocationWsDto, payload, {
+      enableImplicitConversion: false,
+    });
+
+    const errors = validateSync(dto, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+
+    if (errors.length > 0) {
+      throw new BadRequestException('Invalid volunteer location payload');
+    }
+
+    return dto;
+  }
+
+  private parseRecordedAt(value?: string | number): Date {
+    if (value === undefined || value === null || value === '') {
+      return new Date();
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException('recordedAt is invalid');
+    }
+
+    return parsed;
+  }
+
+  private resolveCorrelationId(candidate?: unknown): string {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+
+    return randomUUID();
+  }
+
+  private isImplausibleJump(
+    previous: VolunteerLocationDto,
+    current: { lat: number; lng: number; recordedAt: Date },
+  ): boolean {
+    const previousRecordedAt = new Date(previous.recordedAt);
+    if (Number.isNaN(previousRecordedAt.getTime())) {
+      return false;
+    }
+
+    const deltaSeconds =
+      (current.recordedAt.getTime() - previousRecordedAt.getTime()) / 1000;
+
+    // Allow up to 5 s of clock skew. Updates with the same or slightly older
+    // timestamp (e.g. forced re-sends from a stationary device) are valid.
+    if (deltaSeconds < -5) {
+      return true;
+    }
+
+    // Cannot calculate speed without a positive time delta — skip the check.
+    if (deltaSeconds <= 0) {
+      return false;
+    }
+
+    const distanceMeters = this.distanceInMeters(
+      previous.lat,
+      previous.lng,
+      current.lat,
+      current.lng,
+    );
+    const impliedSpeed = distanceMeters / deltaSeconds;
+
+    if (impliedSpeed > this.maxImpliedSpeedMetersPerSecond) {
+      this.logger.warn(
+        `[tracking] implausible jump volunteerId=${previous.volunteerId} distanceMeters=${distanceMeters.toFixed(2)} deltaSeconds=${deltaSeconds.toFixed(2)} impliedSpeed=${impliedSpeed.toFixed(2)}`,
+      );
+      return true;
+    }
+
+    return false;
+  }
+
+  private async resolveVolunteerActiveShipment(
+    volunteerId: number,
+  ): Promise<{ shipmentId: number; campaignId: number } | null> {
+    const shipment = await this.shipmentsRepository.findOne({
+      where: {
+        assignedVolunteerId: volunteerId,
+        status: In([ShipmentStatus.ASSIGNED, ShipmentStatus.IN_TRANSIT]),
+      },
+      select: { id: true, campaignId: true },
+      order: { id: 'DESC' },
+    });
+
+    if (!shipment) {
+      return null;
+    }
+
+    return {
+      shipmentId: shipment.id,
+      campaignId: shipment.campaignId,
+    };
+  }
+
+  private distanceInMeters(
+    lat1: number,
+    lng1: number,
+    lat2: number,
+    lng2: number,
+  ): number {
+    const toRadians = (value: number): number => (value * Math.PI) / 180;
+    const earthRadiusMeters = 6371000;
+
+    const dLat = toRadians(lat2 - lat1);
+    const dLng = toRadians(lng2 - lng1);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRadians(lat1)) *
+        Math.cos(toRadians(lat2)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return earthRadiusMeters * c;
+  }
+
+  private emitGlobalVolunteersSnapshot(client: AuthenticatedSocket): void {
+    const snapshot: VolunteerLocationsSnapshotDto = {
+      volunteers: this.volunteerLocationService.getAllLocations(),
+    };
+
+    client.emit('volunteers.locations.snapshot', snapshot);
+    client.emit('volunteer.location.snapshot', snapshot);
+  }
+
+  private emitCampaignVolunteersSnapshot(
+    client: AuthenticatedSocket,
+    campaignId: number,
+  ): void {
+    void this.emitCampaignVolunteersSnapshotAsync(client, campaignId);
+  }
+
+  private async emitCampaignVolunteersSnapshotAsync(
+    client: AuthenticatedSocket,
+    campaignId: number,
+  ): Promise<void> {
+    const memoryLocations = this.volunteerLocationService.getCampaignLocations(
+      campaignId,
+    );
+
+    const rows = await this.shipmentLocationsRepository
+      .createQueryBuilder('l')
+      .where('l.campaignId = :campaignId', { campaignId })
+      .orderBy('l.recordedAt', 'DESC')
+      .addOrderBy('l.id', 'DESC')
+      .take(500)
+      .getMany();
+
+    const shipments = await this.shipmentsRepository.find({
+      where: { campaignId },
+      select: { id: true, assignedVolunteerId: true },
+    });
+
+    const assignedMap = new Map<number, number | null>();
+    for (const shipment of shipments) {
+      assignedMap.set(shipment.id, shipment.assignedVolunteerId ?? null);
+    }
+
+    const byVolunteerId = new Map<number, VolunteerLocationDto>();
+
+    for (const location of memoryLocations) {
+      byVolunteerId.set(location.volunteerId, location);
+    }
+
+    for (const row of rows) {
+      const volunteerId =
+        assignedMap.get(row.shipmentId) ?? row.updatedBy ?? undefined;
+      if (!volunteerId || byVolunteerId.has(volunteerId)) {
+        continue;
+      }
+
+      if (!this.volunteerPresenceService.isConnected(volunteerId)) {
+        continue;
+      }
+
+      byVolunteerId.set(volunteerId, {
+        volunteerId,
+        lat: row.lat,
+        lng: row.lng,
+        recordedAt: row.recordedAt.toISOString(),
+        campaignId,
+        shipmentId: row.shipmentId,
+      });
+    }
+
+    const volunteers = Array.from(byVolunteerId.values());
+    const snapshot: VolunteerLocationsSnapshotDto = {
+      volunteers,
+    };
+
+    client.emit('campaign.volunteers.snapshot', {
+      campaignId,
+      volunteers,
+    });
+
+    // Alias transitorio para compatibilidad con clientes antiguos.
+    client.emit('volunteers.locations.snapshot', snapshot);
+  }
+
+  private emitVolunteerLocationUpdates(location: VolunteerLocationDto): void {
+    const payload = {
+      volunteerId: location.volunteerId,
+      lat: location.lat,
+      lng: location.lng,
+      recordedAt: location.recordedAt,
+      campaignId: location.campaignId,
+      shipmentId: location.shipmentId,
+      name: location.name,
+      correlationId: location.correlationId,
+      normalizedCoordinates: location.normalizedCoordinates,
+      stale: location.stale,
+      serverReceivedAt: location.serverReceivedAt,
+    };
+
+    this.server
+      .to('volunteers:locations')
+      .emit('volunteer.location.updated', payload);
+    this.server
+      .to('volunteers:locations')
+      .emit('volunteer.location.changed', payload);
+    this.server
+      .to('volunteers:locations')
+      .emit('volunteer.location.update', payload);
+
+    this.server
+      .to('volunteers:tracking')
+      .emit('volunteer.location.updated', payload);
+    this.server
+      .to('volunteers:tracking')
+      .emit('volunteer.location.changed', payload);
+    this.server
+      .to('volunteers:tracking')
+      .emit('volunteer.location.update', payload);
+
+    if (location.campaignId) {
+      this.server
+        .to(`campaign:${location.campaignId}:volunteers:tracking`)
+        .emit('volunteer.location.updated', payload);
+      this.server
+        .to(`campaign:${location.campaignId}:volunteers:tracking`)
+        .emit('volunteer.location.changed', payload);
+      this.server
+        .to(`campaign:${location.campaignId}:volunteers:tracking`)
+        .emit('volunteer.location.update', payload);
+    }
+  }
+
+  private ensureAuthenticated(client: AuthenticatedSocket): void {
+    if (!client.data.isAuthenticated) {
+      throw new BadRequestException('Authenticated user is required');
+    }
+  }
+
+  private ensureVolunteerRole(client: AuthenticatedSocket): void {
+    if (client.data.role !== UserRole.VOLUNTEER) {
+      throw new BadRequestException(
+        'Only volunteers can report location updates',
+      );
+    }
   }
 
   private emitSystemError(client: Socket, error: unknown, code: string): void {
@@ -765,51 +1402,5 @@ export class RealtimeGateway
 
     filtered.push(now);
     client.data.rateLimit[eventName] = filtered;
-  }
-
-  private async ensureAnonymousAuthor(
-    client: AuthenticatedSocket,
-  ): Promise<{ id: number; name: string }> {
-    if (client.data.isAuthenticated) {
-      throw new ForbiddenException('User does not exist');
-    }
-
-    const role = this.mapRole(client.data.role);
-    const userId = client.data.userId;
-    const fallbackEmail = `anon-${userId}@realtime.local`;
-
-    const existingByEmail = await this.usersRepository.findOne({
-      where: { email: fallbackEmail },
-      select: { id: true, name: true },
-    });
-
-    if (existingByEmail) {
-      client.data.userId = existingByEmail.id;
-      return existingByEmail;
-    }
-
-    const created = await this.usersRepository.save(
-      this.usersRepository.create({
-        name: `Anon ${userId}`,
-        email: fallbackEmail,
-        password: 'temporary-anon-password',
-        role,
-      }),
-    );
-
-    client.data.userId = created.id;
-    return { id: created.id, name: created.name };
-  }
-
-  private mapRole(role: string): UserRole {
-    if (role === UserRole.ORGANIZER) {
-      return UserRole.ORGANIZER;
-    }
-
-    if (role === UserRole.VOLUNTEER) {
-      return UserRole.VOLUNTEER;
-    }
-
-    return UserRole.DONOR;
   }
 }

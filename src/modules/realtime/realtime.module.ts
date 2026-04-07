@@ -9,6 +9,8 @@ import { User } from '../users/entities/user.entity';
 import { RealtimeGateway } from './realtime.gateway';
 import { RealtimeAuthService } from './services/realtime-auth.service';
 import { RoomAuthorizationService } from './services/room-authorization.service';
+import { VolunteerLocationService } from './services/volunteer-location.service';
+import { VolunteerPresenceService } from './services/volunteer-presence.service';
 
 @Module({
   imports: [
@@ -21,6 +23,12 @@ import { RoomAuthorizationService } from './services/room-authorization.service'
       User,
     ]),
   ],
-  providers: [RealtimeGateway, RealtimeAuthService, RoomAuthorizationService],
+  providers: [
+    RealtimeGateway,
+    RealtimeAuthService,
+    RoomAuthorizationService,
+    VolunteerLocationService,
+    VolunteerPresenceService,
+  ],
 })
 export class RealtimeModule {}

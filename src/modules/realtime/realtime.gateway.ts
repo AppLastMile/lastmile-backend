@@ -525,6 +525,15 @@ export class RealtimeGateway
     }
   }
 
+  @SubscribeMessage('volunteers.locations.snapshot.request')
+  handleVolunteerSnapshotRequest(
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ): void {
+    if (client.data.role === UserRole.ORGANIZER) {
+      this.emitGlobalVolunteersSnapshot(client);
+    }
+  }
+
   @SubscribeMessage('volunteer.location.update')
   async volunteerLocationUpdate(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -1148,8 +1157,16 @@ export class RealtimeGateway
 
     const deltaSeconds =
       (current.recordedAt.getTime() - previousRecordedAt.getTime()) / 1000;
-    if (deltaSeconds <= 0) {
+
+    // Allow up to 5 s of clock skew. Updates with the same or slightly older
+    // timestamp (e.g. forced re-sends from a stationary device) are valid.
+    if (deltaSeconds < -5) {
       return true;
+    }
+
+    // Cannot calculate speed without a positive time delta — skip the check.
+    if (deltaSeconds <= 0) {
+      return false;
     }
 
     const distanceMeters = this.distanceInMeters(

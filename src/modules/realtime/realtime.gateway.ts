@@ -17,7 +17,7 @@ import { validateSync } from 'class-validator';
 import { InjectRepository } from '@nestjs/typeorm';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Server, Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient } from 'redis';
@@ -184,6 +184,12 @@ export class RealtimeGateway
       );
 
       await socket.join(`user:${authUser.userId}`);
+
+      if (user.role === UserRole.ORGANIZER) {
+        await socket.join('volunteers:locations');
+        await socket.join('volunteers:tracking');
+        this.emitGlobalVolunteersSnapshot(socket);
+      }
 
       this.logger.log(
         `WS connected user=${authUser.userId} socket=${client.id}`,
@@ -645,6 +651,16 @@ export class RealtimeGateway
         this.logger.log(
           `[tracking] saved correlationId=${correlationId} shipmentId=${shipmentId} userId=${client.data.userId} lat=${lat} lng=${lng}`,
         );
+      }
+
+      if (!shipmentId || !campaignId) {
+        const inferred = await this.resolveVolunteerActiveShipment(
+          client.data.userId,
+        );
+        if (inferred) {
+          shipmentId = shipmentId ?? inferred.shipmentId;
+          campaignId = campaignId ?? inferred.campaignId;
+        }
       }
 
       const location: VolunteerLocationDto = {
@@ -1154,6 +1170,28 @@ export class RealtimeGateway
     return false;
   }
 
+  private async resolveVolunteerActiveShipment(
+    volunteerId: number,
+  ): Promise<{ shipmentId: number; campaignId: number } | null> {
+    const shipment = await this.shipmentsRepository.findOne({
+      where: {
+        assignedVolunteerId: volunteerId,
+        status: In([ShipmentStatus.ASSIGNED, ShipmentStatus.IN_TRANSIT]),
+      },
+      select: { id: true, campaignId: true },
+      order: { id: 'DESC' },
+    });
+
+    if (!shipment) {
+      return null;
+    }
+
+    return {
+      shipmentId: shipment.id,
+      campaignId: shipment.campaignId,
+    };
+  }
+
   private distanceInMeters(
     lat1: number,
     lng1: number,
@@ -1190,9 +1228,63 @@ export class RealtimeGateway
     client: AuthenticatedSocket,
     campaignId: number,
   ): void {
-    const volunteers = this.volunteerLocationService.getCampaignLocations(
+    void this.emitCampaignVolunteersSnapshotAsync(client, campaignId);
+  }
+
+  private async emitCampaignVolunteersSnapshotAsync(
+    client: AuthenticatedSocket,
+    campaignId: number,
+  ): Promise<void> {
+    const memoryLocations = this.volunteerLocationService.getCampaignLocations(
       campaignId,
     );
+
+    const rows = await this.shipmentLocationsRepository
+      .createQueryBuilder('l')
+      .where('l.campaignId = :campaignId', { campaignId })
+      .orderBy('l.recordedAt', 'DESC')
+      .addOrderBy('l.id', 'DESC')
+      .take(500)
+      .getMany();
+
+    const shipments = await this.shipmentsRepository.find({
+      where: { campaignId },
+      select: { id: true, assignedVolunteerId: true },
+    });
+
+    const assignedMap = new Map<number, number | null>();
+    for (const shipment of shipments) {
+      assignedMap.set(shipment.id, shipment.assignedVolunteerId ?? null);
+    }
+
+    const byVolunteerId = new Map<number, VolunteerLocationDto>();
+
+    for (const location of memoryLocations) {
+      byVolunteerId.set(location.volunteerId, location);
+    }
+
+    for (const row of rows) {
+      const volunteerId =
+        assignedMap.get(row.shipmentId) ?? row.updatedBy ?? undefined;
+      if (!volunteerId || byVolunteerId.has(volunteerId)) {
+        continue;
+      }
+
+      if (!this.volunteerPresenceService.isConnected(volunteerId)) {
+        continue;
+      }
+
+      byVolunteerId.set(volunteerId, {
+        volunteerId,
+        lat: row.lat,
+        lng: row.lng,
+        recordedAt: row.recordedAt.toISOString(),
+        campaignId,
+        shipmentId: row.shipmentId,
+      });
+    }
+
+    const volunteers = Array.from(byVolunteerId.values());
     const snapshot: VolunteerLocationsSnapshotDto = {
       volunteers,
     };

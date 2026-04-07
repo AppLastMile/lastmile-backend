@@ -47,4 +47,8 @@ export class VolunteerPresenceService {
   isConnected(userId: number): boolean {
     return this.socketsByUserId.has(userId);
   }
+
+  getLinkedUser(socketId: string): { userId: number; role: PresenceRole } | null {
+    return this.userBySocketId.get(socketId) ?? null;
+  }
 }

@@ -12,6 +12,8 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { InjectRepository } from '@nestjs/typeorm';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -19,6 +21,7 @@ import { Repository } from 'typeorm';
 import { Server, Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient } from 'redis';
+import { randomUUID } from 'crypto';
 import { Message } from '../chat/entities/message.entity';
 import { Campaign } from '../campaigns/entities/campaign.entity';
 import { User, UserRole } from '../users/entities/user.entity';
@@ -44,6 +47,7 @@ import {
   VolunteerLocationsSnapshotDto,
 } from './services/volunteer-location.service';
 import { VolunteerPresenceService } from './services/volunteer-presence.service';
+import { VolunteerLocationWsDto } from './dto/volunteer-location-ws.dto';
 
 type AuthenticatedSocket = Socket & {
   data: {
@@ -107,6 +111,8 @@ export class RealtimeGateway
   server!: Server;
 
   private readonly logger = new Logger(RealtimeGateway.name);
+  private readonly staleThresholdMs = 60_000;
+  private readonly maxImpliedSpeedMetersPerSecond = 70;
 
   constructor(
     @InjectRepository(Message)
@@ -531,30 +537,81 @@ export class RealtimeGateway
       recordedAt?: string | number;
       campaignId?: number;
       shipmentId?: number;
+      correlationId?: string;
     },
   ): Promise<void> {
     try {
+      const serverReceivedAt = new Date();
+      const correlationId = this.resolveCorrelationId(payload?.correlationId);
+
       this.ensureAuthenticated(client);
       this.ensureVolunteerRole(client);
       this.enforceRateLimit(client, 'volunteer.location.update', 1, 2000);
 
-      const { lat, lng } = this.extractCoordinates(payload);
+      const linkedPresence = this.volunteerPresenceService.getLinkedUser(
+        client.id,
+      );
+      if (linkedPresence && linkedPresence.userId !== client.data.userId) {
+        this.logger.warn(
+          `[tracking] correlationId=${correlationId} socket-user mismatch socket=${client.id} socketUser=${linkedPresence.userId} requestUser=${client.data.userId}`,
+        );
+      }
+
+      const extracted = this.extractAndNormalizeCoordinates(payload);
+      const lat = extracted.lat;
+      const lng = extracted.lng;
+      const normalizedCoordinates = extracted.normalizedCoordinates;
+      const recordedAt = this.parseRecordedAt(payload?.recordedAt);
+
+      const validatedPayload = this.validateVolunteerLocationDto({
+        lat,
+        lng,
+        recordedAt: recordedAt.toISOString(),
+        campaignId:
+          payload?.campaignId === undefined ? undefined : Number(payload.campaignId),
+        shipmentId:
+          payload?.shipmentId === undefined ? undefined : Number(payload.shipmentId),
+        correlationId,
+      });
+
+      const stale =
+        serverReceivedAt.getTime() - recordedAt.getTime() > this.staleThresholdMs;
+
+      this.logger.log(
+        `[tracking] received correlationId=${correlationId} userId=${client.data.userId} role=${client.data.role} lat=${lat} lng=${lng} recordedAt=${recordedAt.toISOString()} serverReceivedAt=${serverReceivedAt.toISOString()} normalized=${normalizedCoordinates} stale=${stale}`,
+      );
+
+      if (stale) {
+        this.logger.warn(
+          `[tracking] correlationId=${correlationId} stale location userId=${client.data.userId} ageMs=${serverReceivedAt.getTime() - recordedAt.getTime()}`,
+        );
+      }
+
+      const previousLocation = this.volunteerLocationService.getByVolunteerId(
+        client.data.userId,
+      );
+      if (
+        previousLocation &&
+        this.isImplausibleJump(previousLocation, {
+          lat,
+          lng,
+          recordedAt,
+        })
+      ) {
+        throw new BadRequestException(
+          'Location discarded due to implausible speed/jump',
+        );
+      }
 
       let campaignId: number | undefined = undefined;
       let shipmentId: number | undefined = undefined;
 
       if (payload?.campaignId !== undefined) {
-        campaignId = Number(payload.campaignId);
-        if (!Number.isInteger(campaignId) || campaignId <= 0) {
-          throw new BadRequestException('campaignId is invalid');
-        }
+        campaignId = validatedPayload.campaignId;
       }
 
       if (payload?.shipmentId !== undefined) {
-        shipmentId = Number(payload.shipmentId);
-        if (!Number.isInteger(shipmentId) || shipmentId <= 0) {
-          throw new BadRequestException('shipmentId is invalid');
-        }
+        shipmentId = validatedPayload.shipmentId;
 
         const shipment = await this.shipmentsRepository.findOne({
           where: { id: shipmentId },
@@ -572,8 +629,6 @@ export class RealtimeGateway
 
         campaignId = campaignId ?? shipment.campaignId;
 
-        const recordedAtForRow = this.parseRecordedAt(payload?.recordedAt);
-
         const locationRow = this.shipmentLocationsRepository.create({
           shipmentId,
           campaignId: shipment.campaignId,
@@ -581,20 +636,26 @@ export class RealtimeGateway
           lng,
           speed: null,
           heading: null,
-          recordedAt: recordedAtForRow,
+          recordedAt,
           updatedBy: client.data.userId,
         });
 
         await this.shipmentLocationsRepository.save(locationRow);
-      }
 
-      const recordedAt = this.parseRecordedAt(payload?.recordedAt);
+        this.logger.log(
+          `[tracking] saved correlationId=${correlationId} shipmentId=${shipmentId} userId=${client.data.userId} lat=${lat} lng=${lng}`,
+        );
+      }
 
       const location: VolunteerLocationDto = {
         volunteerId: client.data.userId,
         lat,
         lng,
         recordedAt: recordedAt.toISOString(),
+        correlationId,
+        normalizedCoordinates,
+        stale,
+        serverReceivedAt: serverReceivedAt.toISOString(),
         name: client.data.userName,
         campaignId,
         shipmentId,
@@ -602,9 +663,20 @@ export class RealtimeGateway
 
       this.volunteerLocationService.upsertLocation(location);
       this.emitVolunteerLocationUpdates(location);
+
+      this.logger.log(
+        `[tracking] broadcast correlationId=${correlationId} userId=${client.data.userId} room=volunteers:locations lat=${lat} lng=${lng}`,
+      );
+
       client.emit('volunteer.location.ack', {
+        correlationId,
         volunteerId: location.volunteerId,
+        lat,
+        lng,
+        normalizedCoordinates,
+        stale,
         recordedAt: location.recordedAt,
+        serverReceivedAt: serverReceivedAt.toISOString(),
       });
     } catch (error) {
       this.emitSystemError(client, error, 'VOLUNTEER_LOCATION_ERROR');
@@ -638,7 +710,9 @@ export class RealtimeGateway
       this.enforceRateLimit(client, 'shipment.location.update', 1, 2000);
 
       const shipmentId = Number(payload?.shipmentId);
-      const { lat, lng } = this.extractCoordinates(payload);
+      const extracted = this.extractAndNormalizeCoordinates(payload);
+      const lat = extracted.lat;
+      const lng = extracted.lng;
 
       if (!Number.isInteger(shipmentId) || shipmentId <= 0) {
         throw new BadRequestException('shipmentId is invalid');
@@ -955,7 +1029,7 @@ export class RealtimeGateway
     return null;
   }
 
-  private extractCoordinates(payload: {
+  private extractAndNormalizeCoordinates(payload: {
     lat?: number;
     lng?: number;
     latitude?: number;
@@ -966,18 +1040,32 @@ export class RealtimeGateway
       latitude?: number;
       longitude?: number;
     };
-  }): { lat: number; lng: number } {
+  }): { lat: number; lng: number; normalizedCoordinates: boolean } {
     const rawLat =
       payload?.lat ?? payload?.latitude ?? payload?.coords?.lat ?? payload?.coords?.latitude;
     const rawLng =
       payload?.lng ?? payload?.longitude ?? payload?.coords?.lng ?? payload?.coords?.longitude;
 
-    const lat = Number(rawLat);
-    const lng = Number(rawLng);
+    const latCandidate = Number(rawLat);
+    const lngCandidate = Number(rawLng);
 
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    if (!Number.isFinite(latCandidate) || !Number.isFinite(lngCandidate)) {
       throw new BadRequestException(
         'Coordinates are required (lat/lng or latitude/longitude)',
+      );
+    }
+
+    const shouldSwap =
+      Math.abs(latCandidate) > 90 &&
+      Math.abs(latCandidate) <= 180 &&
+      Math.abs(lngCandidate) <= 90;
+
+    const lat = shouldSwap ? lngCandidate : latCandidate;
+    const lng = shouldSwap ? latCandidate : lngCandidate;
+
+    if (shouldSwap) {
+      this.logger.warn(
+        `[tracking] coordinates normalized by swap rawLat=${latCandidate} rawLng=${lngCandidate} finalLat=${lat} finalLng=${lng}`,
       );
     }
 
@@ -985,7 +1073,31 @@ export class RealtimeGateway
       throw new BadRequestException('lat/lng are out of range');
     }
 
-    return { lat, lng };
+    return { lat, lng, normalizedCoordinates: shouldSwap };
+  }
+
+  private validateVolunteerLocationDto(payload: {
+    lat: number;
+    lng: number;
+    recordedAt?: string;
+    campaignId?: number;
+    shipmentId?: number;
+    correlationId?: string;
+  }): VolunteerLocationWsDto {
+    const dto = plainToInstance(VolunteerLocationWsDto, payload, {
+      enableImplicitConversion: false,
+    });
+
+    const errors = validateSync(dto, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+
+    if (errors.length > 0) {
+      throw new BadRequestException('Invalid volunteer location payload');
+    }
+
+    return dto;
   }
 
   private parseRecordedAt(value?: string | number): Date {
@@ -999,6 +1111,70 @@ export class RealtimeGateway
     }
 
     return parsed;
+  }
+
+  private resolveCorrelationId(candidate?: unknown): string {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+
+    return randomUUID();
+  }
+
+  private isImplausibleJump(
+    previous: VolunteerLocationDto,
+    current: { lat: number; lng: number; recordedAt: Date },
+  ): boolean {
+    const previousRecordedAt = new Date(previous.recordedAt);
+    if (Number.isNaN(previousRecordedAt.getTime())) {
+      return false;
+    }
+
+    const deltaSeconds =
+      (current.recordedAt.getTime() - previousRecordedAt.getTime()) / 1000;
+    if (deltaSeconds <= 0) {
+      return true;
+    }
+
+    const distanceMeters = this.distanceInMeters(
+      previous.lat,
+      previous.lng,
+      current.lat,
+      current.lng,
+    );
+    const impliedSpeed = distanceMeters / deltaSeconds;
+
+    if (impliedSpeed > this.maxImpliedSpeedMetersPerSecond) {
+      this.logger.warn(
+        `[tracking] implausible jump volunteerId=${previous.volunteerId} distanceMeters=${distanceMeters.toFixed(2)} deltaSeconds=${deltaSeconds.toFixed(2)} impliedSpeed=${impliedSpeed.toFixed(2)}`,
+      );
+      return true;
+    }
+
+    return false;
+  }
+
+  private distanceInMeters(
+    lat1: number,
+    lng1: number,
+    lat2: number,
+    lng2: number,
+  ): number {
+    const toRadians = (value: number): number => (value * Math.PI) / 180;
+    const earthRadiusMeters = 6371000;
+
+    const dLat = toRadians(lat2 - lat1);
+    const dLng = toRadians(lng2 - lng1);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRadians(lat1)) *
+        Math.cos(toRadians(lat2)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return earthRadiusMeters * c;
   }
 
   private emitGlobalVolunteersSnapshot(client: AuthenticatedSocket): void {
@@ -1031,36 +1207,50 @@ export class RealtimeGateway
   }
 
   private emitVolunteerLocationUpdates(location: VolunteerLocationDto): void {
+    const payload = {
+      volunteerId: location.volunteerId,
+      lat: location.lat,
+      lng: location.lng,
+      recordedAt: location.recordedAt,
+      campaignId: location.campaignId,
+      shipmentId: location.shipmentId,
+      name: location.name,
+      correlationId: location.correlationId,
+      normalizedCoordinates: location.normalizedCoordinates,
+      stale: location.stale,
+      serverReceivedAt: location.serverReceivedAt,
+    };
+
     this.server
       .to('volunteers:locations')
-      .emit('volunteer.location.updated', location);
+      .emit('volunteer.location.updated', payload);
     this.server
       .to('volunteers:locations')
-      .emit('volunteer.location.changed', location);
+      .emit('volunteer.location.changed', payload);
     this.server
       .to('volunteers:locations')
-      .emit('volunteer.location.update', location);
+      .emit('volunteer.location.update', payload);
 
     this.server
       .to('volunteers:tracking')
-      .emit('volunteer.location.updated', location);
+      .emit('volunteer.location.updated', payload);
     this.server
       .to('volunteers:tracking')
-      .emit('volunteer.location.changed', location);
+      .emit('volunteer.location.changed', payload);
     this.server
       .to('volunteers:tracking')
-      .emit('volunteer.location.update', location);
+      .emit('volunteer.location.update', payload);
 
     if (location.campaignId) {
       this.server
         .to(`campaign:${location.campaignId}:volunteers:tracking`)
-        .emit('volunteer.location.updated', location);
+        .emit('volunteer.location.updated', payload);
       this.server
         .to(`campaign:${location.campaignId}:volunteers:tracking`)
-        .emit('volunteer.location.changed', location);
+        .emit('volunteer.location.changed', payload);
       this.server
         .to(`campaign:${location.campaignId}:volunteers:tracking`)
-        .emit('volunteer.location.update', location);
+        .emit('volunteer.location.update', payload);
     }
   }
 

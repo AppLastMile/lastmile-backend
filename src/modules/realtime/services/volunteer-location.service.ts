@@ -5,6 +5,10 @@ export type VolunteerLocationDto = {
   lat: number;
   lng: number;
   recordedAt: string;
+  correlationId?: string;
+  normalizedCoordinates?: boolean;
+  stale?: boolean;
+  serverReceivedAt?: string;
   name?: string;
   campaignId?: number;
   shipmentId?: number;
@@ -25,6 +29,10 @@ export class VolunteerLocationService {
   upsertLocation(location: VolunteerLocationDto): VolunteerLocationDto {
     this.latestLocationByVolunteerId.set(location.volunteerId, location);
     return location;
+  }
+
+  getByVolunteerId(volunteerId: number): VolunteerLocationDto | undefined {
+    return this.latestLocationByVolunteerId.get(volunteerId);
   }
 
   removeLocation(volunteerId: number): boolean {

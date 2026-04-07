@@ -520,7 +520,15 @@ export class RealtimeGateway
     payload: {
       lat?: number;
       lng?: number;
-      recordedAt?: string;
+      latitude?: number;
+      longitude?: number;
+      coords?: {
+        lat?: number;
+        lng?: number;
+        latitude?: number;
+        longitude?: number;
+      };
+      recordedAt?: string | number;
       campaignId?: number;
       shipmentId?: number;
     },
@@ -530,16 +538,7 @@ export class RealtimeGateway
       this.ensureVolunteerRole(client);
       this.enforceRateLimit(client, 'volunteer.location.update', 1, 2000);
 
-      const lat = Number(payload?.lat);
-      const lng = Number(payload?.lng);
-
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        throw new BadRequestException('lat/lng are required');
-      }
-
-      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-        throw new BadRequestException('lat/lng are out of range');
-      }
+      const { lat, lng } = this.extractCoordinates(payload);
 
       let campaignId: number | undefined = undefined;
       let shipmentId: number | undefined = undefined;
@@ -573,6 +572,8 @@ export class RealtimeGateway
 
         campaignId = campaignId ?? shipment.campaignId;
 
+        const recordedAtForRow = this.parseRecordedAt(payload?.recordedAt);
+
         const locationRow = this.shipmentLocationsRepository.create({
           shipmentId,
           campaignId: shipment.campaignId,
@@ -580,23 +581,14 @@ export class RealtimeGateway
           lng,
           speed: null,
           heading: null,
-          recordedAt: payload?.recordedAt ? new Date(payload.recordedAt) : new Date(),
+          recordedAt: recordedAtForRow,
           updatedBy: client.data.userId,
         });
-
-        if (Number.isNaN(locationRow.recordedAt.getTime())) {
-          throw new BadRequestException('recordedAt is invalid');
-        }
 
         await this.shipmentLocationsRepository.save(locationRow);
       }
 
-      const recordedAt = payload?.recordedAt
-        ? new Date(payload.recordedAt)
-        : new Date();
-      if (Number.isNaN(recordedAt.getTime())) {
-        throw new BadRequestException('recordedAt is invalid');
-      }
+      const recordedAt = this.parseRecordedAt(payload?.recordedAt);
 
       const location: VolunteerLocationDto = {
         volunteerId: client.data.userId,
@@ -627,9 +619,17 @@ export class RealtimeGateway
       shipmentId?: number;
       lat?: number;
       lng?: number;
+      latitude?: number;
+      longitude?: number;
+      coords?: {
+        lat?: number;
+        lng?: number;
+        latitude?: number;
+        longitude?: number;
+      };
       speed?: number;
       heading?: number;
-      recordedAt?: string;
+      recordedAt?: string | number;
     },
   ): Promise<void> {
     try {
@@ -638,19 +638,10 @@ export class RealtimeGateway
       this.enforceRateLimit(client, 'shipment.location.update', 1, 2000);
 
       const shipmentId = Number(payload?.shipmentId);
-      const lat = Number(payload?.lat);
-      const lng = Number(payload?.lng);
+      const { lat, lng } = this.extractCoordinates(payload);
 
       if (!Number.isInteger(shipmentId) || shipmentId <= 0) {
         throw new BadRequestException('shipmentId is invalid');
-      }
-
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        throw new BadRequestException('lat/lng are required');
-      }
-
-      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-        throw new BadRequestException('lat/lng are out of range');
       }
 
       await this.roomAuthorizationService.validateAndNormalizeRoom(
@@ -675,12 +666,7 @@ export class RealtimeGateway
         );
       }
 
-      const recordedAt = payload?.recordedAt
-        ? new Date(payload.recordedAt)
-        : new Date();
-      if (Number.isNaN(recordedAt.getTime())) {
-        throw new BadRequestException('recordedAt is invalid');
-      }
+      const recordedAt = this.parseRecordedAt(payload?.recordedAt);
 
       const row = this.shipmentLocationsRepository.create({
         shipmentId,
@@ -967,6 +953,52 @@ export class RealtimeGateway
     }
 
     return null;
+  }
+
+  private extractCoordinates(payload: {
+    lat?: number;
+    lng?: number;
+    latitude?: number;
+    longitude?: number;
+    coords?: {
+      lat?: number;
+      lng?: number;
+      latitude?: number;
+      longitude?: number;
+    };
+  }): { lat: number; lng: number } {
+    const rawLat =
+      payload?.lat ?? payload?.latitude ?? payload?.coords?.lat ?? payload?.coords?.latitude;
+    const rawLng =
+      payload?.lng ?? payload?.longitude ?? payload?.coords?.lng ?? payload?.coords?.longitude;
+
+    const lat = Number(rawLat);
+    const lng = Number(rawLng);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new BadRequestException(
+        'Coordinates are required (lat/lng or latitude/longitude)',
+      );
+    }
+
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      throw new BadRequestException('lat/lng are out of range');
+    }
+
+    return { lat, lng };
+  }
+
+  private parseRecordedAt(value?: string | number): Date {
+    if (value === undefined || value === null || value === '') {
+      return new Date();
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException('recordedAt is invalid');
+    }
+
+    return parsed;
   }
 
   private emitGlobalVolunteersSnapshot(client: AuthenticatedSocket): void {

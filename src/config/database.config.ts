@@ -18,11 +18,11 @@ export function getTypeOrmConfig(
           password: configService.getOrThrow<string>('DB_PASSWORD'),
           database: configService.getOrThrow<string>('DB_NAME'),
         }),
+    ssl: databaseUrl ? { rejectUnauthorized: false } : false,
+    extra: { family: 4 },
     autoLoadEntities: true,
     synchronize: !isProduction,
-    migrations: isProduction
-      ? ['dist/migrations/*.js']
-      : ['src/migrations/*.ts'],
+    migrations: ['dist/migrations/*.js'],
     migrationsRun: isProduction,
   };
 }

@@ -7,6 +7,7 @@ type EnvConfig = {
   DB_PASSWORD?: string;
   DB_NAME?: string;
   JWT_SECRET: string;
+  GOOGLE_CLIENT_ID?: string;
 };
 
 function getRequiredString(
@@ -71,6 +72,12 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
       ? config.DB_NAME
       : undefined;
 
+  const googleClientId =
+    typeof config.GOOGLE_CLIENT_ID === 'string' &&
+    config.GOOGLE_CLIENT_ID.trim().length > 0
+      ? config.GOOGLE_CLIENT_ID
+      : undefined;
+
   // Allow either a full DATABASE_URL or the discrete DB_* variables.
   if (!databaseUrl) {
     return {
@@ -82,6 +89,7 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
       DB_PASSWORD: getRequiredString(config, 'DB_PASSWORD'),
       DB_NAME: getRequiredString(config, 'DB_NAME'),
       JWT_SECRET: getRequiredString(config, 'JWT_SECRET'),
+      GOOGLE_CLIENT_ID: googleClientId,
     };
   }
 
@@ -94,5 +102,6 @@ export function validateEnv(config: Record<string, unknown>): EnvConfig {
     DB_PASSWORD: dbPassword,
     DB_NAME: dbName,
     JWT_SECRET: getRequiredString(config, 'JWT_SECRET'),
+    GOOGLE_CLIENT_ID: googleClientId,
   };
 }

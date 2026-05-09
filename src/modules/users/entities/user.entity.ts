@@ -22,8 +22,11 @@ export class User {
   @Column({ unique: true, length: 120 })
   email!: string;
 
-  @Column({ select: false })
-  password!: string;
+  @Column({ type: 'varchar', length: 255, select: false, nullable: true })
+  password?: string | null;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  googleId?: string | null;
 
   @Column({ type: 'enum', enum: UserRole })
   role!: UserRole;

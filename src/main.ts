@@ -35,6 +35,8 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const port = Number(process.env.PORT ?? 3000);
 
+  app.setGlobalPrefix('api/v1');
+
   app.enableCors({
     origin: (
       origin: string | undefined,

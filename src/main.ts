@@ -35,6 +35,8 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const port = Number(process.env.PORT ?? 3000);
 
+  app.setGlobalPrefix('api/v1');
+
   app.enableCors({
     origin: (
       origin: string | undefined,
@@ -57,6 +59,33 @@ async function bootstrap() {
     ],
     exposedHeaders: ['Authorization'],
     optionsSuccessStatus: 204,
+  });
+  // Support requests that are forwarded to unprefixed paths (e.g. ngrok -> /auth)
+  // by adding CORS headers and rewriting the URL to include the global prefix
+  // so Nest's controllers (which live under /api/v1) will be matched.
+  app.use((req: any, res: any, next: any) => {
+    const origin = req.headers.origin as string | undefined;
+
+    if (req.path && req.path.startsWith('/auth')) {
+      // Add CORS headers for any request to /auth so the browser sees them.
+      if (isAllowedCorsOrigin(origin)) {
+        res.header('Access-Control-Allow-Origin', origin ?? '*');
+        res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, ngrok-skip-browser-warning');
+        res.header('Access-Control-Allow-Credentials', 'true');
+      }
+
+      // If the request is a preflight, respond immediately.
+      if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+      }
+
+      // Rewrite URL so Nest's global prefix routes are matched.
+      // Example: /auth/login -> /api/v1/auth/login
+      req.url = `/api/v1${req.url}`;
+    }
+
+    return next();
   });
   app.useGlobalPipes(
     new ValidationPipe({

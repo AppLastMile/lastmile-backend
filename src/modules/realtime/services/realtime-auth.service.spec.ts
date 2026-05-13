@@ -1,3 +1,4 @@
+import { createHmac } from 'crypto';
 import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RealtimeAuthService } from './realtime-auth.service';
@@ -39,7 +40,6 @@ describe('RealtimeAuthService', () => {
     });
 
     it('throws on expired token', () => {
-      const { createHmac } = require('crypto');
       const secret = 'test-secret';
       const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
         .toString('base64')
@@ -71,7 +71,6 @@ describe('RealtimeAuthService', () => {
     });
 
     it('throws when userId is invalid', () => {
-      const { createHmac } = require('crypto');
       const secret = 'test-secret';
       const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
         .toString('base64')
@@ -99,7 +98,6 @@ describe('RealtimeAuthService', () => {
     });
 
     it('throws on invalid payload base64', () => {
-      const { createHmac } = require('crypto');
       const secret = 'test-secret';
       const header = 'eyJhbGciOiJIUzI1NiJ9';
       const badBody = '!!!not-valid-base64!!!';
@@ -117,7 +115,6 @@ describe('RealtimeAuthService', () => {
     });
 
     it('defaults role to donor when role is not a string', () => {
-      const { createHmac } = require('crypto');
       const secret = 'test-secret';
       const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
         .toString('base64')

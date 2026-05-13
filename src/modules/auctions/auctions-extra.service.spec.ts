@@ -117,12 +117,12 @@ const makeService = (repoOverrides: any = {}) => {
   const eventEmitter = { emit: jest.fn() };
 
   const svc = new AuctionsService(
-    auctionRepo as any,
-    bidRepo as any,
-    productRepo as any,
-    campaignRepo as any,
-    dataSource as any,
-    eventEmitter as any,
+    auctionRepo,
+    bidRepo,
+    productRepo,
+    campaignRepo,
+    dataSource,
+    eventEmitter,
   );
 
   return {

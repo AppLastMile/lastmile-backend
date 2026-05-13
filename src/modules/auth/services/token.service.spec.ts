@@ -1,3 +1,4 @@
+import { createHmac } from 'crypto';
 import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TokenService } from './token.service';
@@ -63,7 +64,6 @@ describe('TokenService', () => {
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
-      const { createHmac } = require('crypto');
       const sig = createHmac('sha256', 'test-secret')
         .update(`${header}.${body}`)
         .digest()
@@ -94,7 +94,6 @@ describe('TokenService', () => {
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
-      const { createHmac } = require('crypto');
       const sig = createHmac('sha256', 'test-secret')
         .update(`${header}.${body}`)
         .digest()
@@ -111,7 +110,6 @@ describe('TokenService', () => {
       const svc = makeService();
       const header = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
       const badBody = '!!!invalid!!!';
-      const { createHmac } = require('crypto');
       const sig = createHmac('sha256', 'test-secret')
         .update(`${header}.${badBody}`)
         .digest()
@@ -136,7 +134,6 @@ describe('TokenService', () => {
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
-      const { createHmac } = require('crypto');
       const sig = createHmac('sha256', 'test-secret')
         .update(`${header}.${body}`)
         .digest()

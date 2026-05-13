@@ -120,16 +120,16 @@ const makeGateway = (overrides: any = {}) => {
   const eventEmitter = { emit: jest.fn(), ...overrides.eventEmitter };
 
   const gw = new RealtimeGateway(
-    messagesRepo as any,
-    campaignsRepo as any,
-    usersRepo as any,
-    shipmentsRepo as any,
-    shipmentLocationsRepo as any,
-    realtimeAuthService as any,
-    roomAuthService as any,
-    volunteerPresenceService as any,
-    volunteerLocationService as any,
-    eventEmitter as any,
+    messagesRepo,
+    campaignsRepo,
+    usersRepo,
+    shipmentsRepo,
+    shipmentLocationsRepo,
+    realtimeAuthService,
+    roomAuthService,
+    volunteerPresenceService,
+    volunteerLocationService,
+    eventEmitter,
   );
   gw.server = makeServer() as any;
   return {
@@ -164,14 +164,14 @@ describe('RealtimeGateway', () => {
       const socket = makeSocket({
         handshake: { headers: { authorization: 'Bearer token123' }, auth: {} },
       });
-      await gw.handleConnection(socket as any);
+      await gw.handleConnection(socket);
       expect(socket.join).toHaveBeenCalledWith('user:1');
     });
 
     it('disconnects when no token provided', async () => {
       const { gw } = makeGateway();
       const socket = makeSocket({ handshake: { headers: {}, auth: {} } });
-      await gw.handleConnection(socket as any);
+      await gw.handleConnection(socket);
       expect(socket.disconnect).toHaveBeenCalledWith(true);
       expect(socket.emit).toHaveBeenCalledWith(
         'system.error',
@@ -187,7 +187,7 @@ describe('RealtimeGateway', () => {
       const socket = makeSocket({
         handshake: { headers: { authorization: 'Bearer bad-token' }, auth: {} },
       });
-      await gw.handleConnection(socket as any);
+      await gw.handleConnection(socket);
       expect(socket.disconnect).toHaveBeenCalledWith(true);
       expect(socket.emit).toHaveBeenCalledWith(
         'system.error',
@@ -201,7 +201,7 @@ describe('RealtimeGateway', () => {
       const socket = makeSocket({
         handshake: { headers: { authorization: 'Bearer token' }, auth: {} },
       });
-      await gw.handleConnection(socket as any);
+      await gw.handleConnection(socket);
       expect(socket.disconnect).toHaveBeenCalledWith(true);
     });
 
@@ -215,7 +215,7 @@ describe('RealtimeGateway', () => {
       const socket = makeSocket({
         handshake: { headers: { authorization: 'Bearer token' }, auth: {} },
       });
-      await gw.handleConnection(socket as any);
+      await gw.handleConnection(socket);
       expect(socket.join).toHaveBeenCalledWith('volunteers:locations');
       expect(socket.join).toHaveBeenCalledWith('volunteers:tracking');
     });
@@ -225,7 +225,7 @@ describe('RealtimeGateway', () => {
       const socket = makeSocket({
         handshake: { headers: {}, auth: { token: 'mytoken' } },
       });
-      await gw.handleConnection(socket as any);
+      await gw.handleConnection(socket);
       expect(socket.join).toHaveBeenCalledWith('user:1');
     });
   });
@@ -234,7 +234,7 @@ describe('RealtimeGateway', () => {
     it('does nothing when socket was unknown', () => {
       const { gw } = makeGateway();
       const socket = makeSocket();
-      gw.handleDisconnect(socket as any);
+      gw.handleDisconnect(socket);
       expect(gw.server.to).not.toHaveBeenCalled();
     });
 
@@ -246,7 +246,7 @@ describe('RealtimeGateway', () => {
         stillConnected: false,
       });
       const socket = makeSocket();
-      gw.handleDisconnect(socket as any);
+      gw.handleDisconnect(socket);
       expect(gw.server.to).toHaveBeenCalledWith('volunteers:locations');
     });
 
@@ -258,7 +258,7 @@ describe('RealtimeGateway', () => {
         stillConnected: true,
       });
       const socket = makeSocket();
-      gw.handleDisconnect(socket as any);
+      gw.handleDisconnect(socket);
       expect(gw.server.emit).not.toHaveBeenCalled();
     });
   });
@@ -267,7 +267,7 @@ describe('RealtimeGateway', () => {
     it('joins room successfully and emits system.joined', async () => {
       const { gw } = makeGateway();
       const socket = makeSocket();
-      await gw.joinRoom(socket as any, { room: 'campaign:1:chat' });
+      await gw.joinRoom(socket, { room: 'campaign:1:chat' });
       expect(socket.join).toHaveBeenCalled();
       expect(socket.emit).toHaveBeenCalledWith(
         'system.joined',
@@ -278,7 +278,7 @@ describe('RealtimeGateway', () => {
     it('emits system.error when room is missing', async () => {
       const { gw } = makeGateway();
       const socket = makeSocket();
-      await gw.joinRoom(socket as any, {} as any);
+      await gw.joinRoom(socket, {} as any);
       expect(socket.emit).toHaveBeenCalledWith(
         'system.error',
         expect.any(Object),
@@ -291,7 +291,7 @@ describe('RealtimeGateway', () => {
         new Error('forbidden'),
       );
       const socket = makeSocket();
-      await gw.joinRoom(socket as any, { room: 'volunteers:locations' });
+      await gw.joinRoom(socket, { room: 'volunteers:locations' });
       expect(socket.emit).toHaveBeenCalledWith(
         'system.error',
         expect.any(Object),
@@ -311,7 +311,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.joinRoom(socket as any, { room: 'volunteers:locations' });
+      await gw.joinRoom(socket, { room: 'volunteers:locations' });
       expect(socket.emit).toHaveBeenCalledWith(
         'volunteers.locations.snapshot',
         expect.any(Object),
@@ -328,7 +328,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.joinRoom(socket as any, { room: 'campaign:1:chat' });
+      await gw.joinRoom(socket, { room: 'campaign:1:chat' });
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'chat.join',
         expect.any(Object),
@@ -340,7 +340,7 @@ describe('RealtimeGateway', () => {
     it('leaves room and emits system.left', async () => {
       const { gw } = makeGateway();
       const socket = makeSocket();
-      await gw.leaveRoom(socket as any, { room: 'campaign:1:chat' });
+      await gw.leaveRoom(socket, { room: 'campaign:1:chat' });
       expect(socket.leave).toHaveBeenCalledWith('campaign:1:chat');
       expect(socket.emit).toHaveBeenCalledWith(
         'system.left',
@@ -351,7 +351,7 @@ describe('RealtimeGateway', () => {
     it('emits system.error when room is missing', async () => {
       const { gw } = makeGateway();
       const socket = makeSocket();
-      await gw.leaveRoom(socket as any, {} as any);
+      await gw.leaveRoom(socket, {} as any);
       expect(socket.emit).toHaveBeenCalledWith(
         'system.error',
         expect.any(Object),
@@ -370,7 +370,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.sendChatMessage(socket as any, {
+      await gw.sendChatMessage(socket, {
         campaignId: 1,
         message: 'Hello!',
       });
@@ -387,7 +387,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.sendChatMessage(socket as any, {
+      await gw.sendChatMessage(socket, {
         campaignId: -1,
         message: 'Hello!',
       });
@@ -407,7 +407,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.sendChatMessage(socket as any, { campaignId: 1, message: '' });
+      await gw.sendChatMessage(socket, { campaignId: 1, message: '' });
       expect(socket.emit).toHaveBeenCalledWith(
         'chat.message.error',
         expect.any(Object),
@@ -425,7 +425,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.sendChatMessage(socket as any, { campaignId: 1, message: 'Hi' });
+      await gw.sendChatMessage(socket, { campaignId: 1, message: 'Hi' });
       expect(socket.emit).toHaveBeenCalledWith(
         'chat.message.error',
         expect.any(Object),
@@ -443,7 +443,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.sendChatMessage(socket as any, { campaignId: 1, message: 'Hi' });
+      await gw.sendChatMessage(socket, { campaignId: 1, message: 'Hi' });
       expect(socket.emit).toHaveBeenCalledWith(
         'chat.message.error',
         expect.any(Object),
@@ -465,7 +465,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.subscribeShipment(socket as any, { shipmentId: 1 });
+      await gw.subscribeShipment(socket, { shipmentId: 1 });
       expect(socket.join).toHaveBeenCalledWith('shipment:1:tracking');
       expect(socket.emit).toHaveBeenCalledWith(
         'system.joined',
@@ -487,7 +487,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.subscribeShipment(socket as any, { shipmentId: 1 });
+      await gw.subscribeShipment(socket, { shipmentId: 1 });
       expect(socket.emit).toHaveBeenCalledWith(
         'shipment.location.snapshot',
         expect.any(Object),
@@ -497,7 +497,7 @@ describe('RealtimeGateway', () => {
     it('emits system.error on invalid shipmentId', async () => {
       const { gw } = makeGateway();
       const socket = makeSocket();
-      await gw.subscribeShipment(socket as any, { shipmentId: -1 });
+      await gw.subscribeShipment(socket, { shipmentId: -1 });
       expect(socket.emit).toHaveBeenCalledWith(
         'system.error',
         expect.any(Object),
@@ -510,7 +510,7 @@ describe('RealtimeGateway', () => {
         new Error('forbidden'),
       );
       const socket = makeSocket();
-      await gw.subscribeShipment(socket as any, { shipmentId: 1 });
+      await gw.subscribeShipment(socket, { shipmentId: 1 });
       expect(socket.emit).toHaveBeenCalledWith(
         'system.error',
         expect.any(Object),
@@ -532,7 +532,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.subscribeCampaignVolunteers(socket as any, { campaignId: 1 });
+      await gw.subscribeCampaignVolunteers(socket, { campaignId: 1 });
       expect(socket.join).toHaveBeenCalledWith(
         'campaign:1:volunteers:tracking',
       );
@@ -541,7 +541,7 @@ describe('RealtimeGateway', () => {
     it('emits system.error on invalid campaignId', async () => {
       const { gw } = makeGateway();
       const socket = makeSocket();
-      await gw.subscribeCampaignVolunteers(socket as any, { campaignId: -1 });
+      await gw.subscribeCampaignVolunteers(socket, { campaignId: -1 });
       expect(socket.emit).toHaveBeenCalledWith(
         'system.error',
         expect.any(Object),
@@ -560,7 +560,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      gw.handleVolunteerSnapshotRequest(socket as any);
+      gw.handleVolunteerSnapshotRequest(socket);
       expect(socket.emit).toHaveBeenCalledWith(
         'volunteers.locations.snapshot',
         expect.any(Object),
@@ -577,7 +577,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      gw.handleVolunteerSnapshotRequest(socket as any);
+      gw.handleVolunteerSnapshotRequest(socket);
       expect(socket.emit).not.toHaveBeenCalled();
     });
   });
@@ -593,7 +593,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, { lat: 4.6, lng: -74.0 });
+      await gw.volunteerLocationUpdate(socket, { lat: 4.6, lng: -74.0 });
       expect(socket.emit).toHaveBeenCalledWith(
         'volunteer.location.ack',
         expect.any(Object),
@@ -610,7 +610,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, { lat: 4.6, lng: -74.0 });
+      await gw.volunteerLocationUpdate(socket, { lat: 4.6, lng: -74.0 });
       expect(socket.emit).toHaveBeenCalledWith(
         'system.error',
         expect.any(Object),
@@ -627,7 +627,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, {} as any);
+      await gw.volunteerLocationUpdate(socket, {} as any);
       expect(socket.emit).toHaveBeenCalledWith(
         'system.error',
         expect.any(Object),
@@ -644,7 +644,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, {
+      await gw.volunteerLocationUpdate(socket, {
         latitude: 4.6,
         longitude: -74.0,
       });
@@ -664,7 +664,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, {
+      await gw.volunteerLocationUpdate(socket, {
         coords: { lat: 4.6, lng: -74.0 },
       });
       expect(socket.emit).toHaveBeenCalledWith(
@@ -686,7 +686,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, {
+      await gw.volunteerLocationUpdate(socket, {
         lat: 4.6,
         lng: -74.0,
         shipmentId: 1,
@@ -708,7 +708,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, {
+      await gw.volunteerLocationUpdate(socket, {
         lat: 4.6,
         lng: -74.0,
         shipmentId: 1,
@@ -732,7 +732,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, {
+      await gw.volunteerLocationUpdate(socket, {
         lat: 4.6,
         lng: -74.0,
         shipmentId: 1,
@@ -758,7 +758,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.shipmentLocationUpdate(socket as any, {
+      await gw.shipmentLocationUpdate(socket, {
         shipmentId: 1,
         lat: 4.6,
         lng: -74.0,
@@ -779,7 +779,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.shipmentLocationUpdate(socket as any, {
+      await gw.shipmentLocationUpdate(socket, {
         shipmentId: 1,
         lat: 4.6,
         lng: -74.0,
@@ -803,7 +803,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.shipmentLocationUpdate(socket as any, {
+      await gw.shipmentLocationUpdate(socket, {
         shipmentId: 0,
         lat: 4.6,
         lng: -74.0,
@@ -832,7 +832,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.shipmentStatusUpdate(socket as any, {
+      await gw.shipmentStatusUpdate(socket, {
         shipmentId: 1,
         status: ShipmentStatus.IN_TRANSIT,
       });
@@ -852,7 +852,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.shipmentStatusUpdate(socket as any, {
+      await gw.shipmentStatusUpdate(socket, {
         shipmentId: 1,
         status: ShipmentStatus.ASSIGNED,
       });
@@ -862,7 +862,7 @@ describe('RealtimeGateway', () => {
     it('emits system.error on invalid shipmentId', async () => {
       const { gw } = makeGateway();
       const socket = makeSocket();
-      await gw.shipmentStatusUpdate(socket as any, {
+      await gw.shipmentStatusUpdate(socket, {
         shipmentId: -1,
         status: ShipmentStatus.IN_TRANSIT,
       });
@@ -875,7 +875,7 @@ describe('RealtimeGateway', () => {
     it('emits system.error on invalid status', async () => {
       const { gw } = makeGateway();
       const socket = makeSocket();
-      await gw.shipmentStatusUpdate(socket as any, {
+      await gw.shipmentStatusUpdate(socket, {
         shipmentId: 1,
         status: 'not_valid' as any,
       });
@@ -899,7 +899,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.shipmentStatusUpdate(socket as any, {
+      await gw.shipmentStatusUpdate(socket, {
         shipmentId: 1,
         status: ShipmentStatus.IN_TRANSIT,
       });
@@ -1049,14 +1049,14 @@ describe('RealtimeGateway', () => {
         to: jest.fn().mockReturnThis(),
         emit: jest.fn(),
       });
-      await gw.chatTyping(socket as any, { campaignId: 1, isTyping: true });
+      await gw.chatTyping(socket, { campaignId: 1, isTyping: true });
       expect(socket.to).toHaveBeenCalledWith('campaign:1:chat');
     });
 
     it('returns early when campaignId is invalid', async () => {
       const { gw } = makeGateway();
       const socket = makeSocket();
-      await gw.chatTyping(socket as any, { campaignId: -1 });
+      await gw.chatTyping(socket, { campaignId: -1 });
       expect(socket.emit).not.toHaveBeenCalled();
     });
   });
@@ -1072,7 +1072,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, { lat: 200, lng: -74.0 });
+      await gw.volunteerLocationUpdate(socket, { lat: 200, lng: -74.0 });
       expect(socket.emit).toHaveBeenCalledWith(
         'system.error',
         expect.any(Object),
@@ -1089,7 +1089,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, { lat: -74.0, lng: 4.6 });
+      await gw.volunteerLocationUpdate(socket, { lat: -74.0, lng: 4.6 });
       expect(socket.emit).toHaveBeenCalledWith(
         'volunteer.location.ack',
         expect.any(Object),
@@ -1106,7 +1106,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, {
+      await gw.volunteerLocationUpdate(socket, {
         lat: 4.6,
         lng: -74.0,
         recordedAt: 'not-a-date',
@@ -1127,7 +1127,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, {
+      await gw.volunteerLocationUpdate(socket, {
         lat: 4.6,
         lng: -74.0,
         correlationId: 'my-id-123',
@@ -1154,7 +1154,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, {
+      await gw.volunteerLocationUpdate(socket, {
         lat: -34.6,
         lng: 150.0,
       });
@@ -1174,8 +1174,8 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, { lat: 4.6, lng: -74.0 });
-      await gw.volunteerLocationUpdate(socket as any, { lat: 4.6, lng: -74.0 });
+      await gw.volunteerLocationUpdate(socket, { lat: 4.6, lng: -74.0 });
+      await gw.volunteerLocationUpdate(socket, { lat: 4.6, lng: -74.0 });
       expect(socket.emit).toHaveBeenCalledWith(
         'system.error',
         expect.any(Object),
@@ -1195,7 +1195,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.volunteerLocationUpdate(socket as any, { lat: 4.6, lng: -74.0 });
+      await gw.volunteerLocationUpdate(socket, { lat: 4.6, lng: -74.0 });
       expect(socket.emit).toHaveBeenCalledWith(
         'volunteer.location.ack',
         expect.any(Object),
@@ -1220,7 +1220,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.shipmentLocationUpdate(socket as any, {
+      await gw.shipmentLocationUpdate(socket, {
         shipmentId: 1,
         lat: 4.6,
         lng: -74.0,
@@ -1245,7 +1245,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.shipmentLocationUpdate(socket as any, {
+      await gw.shipmentLocationUpdate(socket, {
         shipmentId: 1,
         lat: 4.6,
         lng: -74.0,
@@ -1269,7 +1269,7 @@ describe('RealtimeGateway', () => {
           isAuthenticated: true,
         },
       });
-      await gw.shipmentLocationUpdate(socket as any, {
+      await gw.shipmentLocationUpdate(socket, {
         shipmentId: 1,
         latitude: 4.6,
         longitude: -74.0,

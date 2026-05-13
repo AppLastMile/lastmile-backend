@@ -31,7 +31,7 @@ describe('CreateAuctionDto — CA3 validation', () => {
 
     it('fails when initialPrice is missing', async () => {
       const dto = buildDto();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       delete (dto as any).initialPrice;
       const errors = await validate(dto);
       const priceErrors = errors.filter((e) => e.property === 'initialPrice');
@@ -73,7 +73,7 @@ describe('CreateAuctionDto — CA3 validation', () => {
 
     it('fails when durationMinutes is missing', async () => {
       const dto = buildDto();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       delete (dto as any).durationMinutes;
       const errors = await validate(dto);
       const durationErrors = errors.filter(

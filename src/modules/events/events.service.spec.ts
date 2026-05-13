@@ -35,7 +35,7 @@ const makeService = (overrides: any = {}) => {
   };
   const eventEmitter = { emit: jest.fn() };
   return {
-    svc: new EventsService(repo as any, eventEmitter as any),
+    svc: new EventsService(repo, eventEmitter as any),
     repo,
     eventEmitter,
     qb,

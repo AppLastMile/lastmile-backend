@@ -16,9 +16,9 @@ const makeService = (overrides: any = {}) => {
     ...overrides.events,
   };
   const svc = new RoomAuthorizationService(
-    campaignsRepo as any,
-    shipmentsRepo as any,
-    eventsRepo as any,
+    campaignsRepo,
+    shipmentsRepo,
+    eventsRepo,
   );
   return { svc, campaignsRepo, shipmentsRepo, eventsRepo };
 };

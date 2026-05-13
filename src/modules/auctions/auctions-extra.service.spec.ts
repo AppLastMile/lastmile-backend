@@ -51,18 +51,16 @@ const makeQb = (result: any = null) => ({
   into: jest.fn().mockReturnThis(),
   values: jest.fn().mockReturnThis(),
   orIgnore: jest.fn().mockReturnThis(),
-  execute: jest
-    .fn()
-    .mockResolvedValue({
-      raw: [
-        makeAuction({
-          status: AuctionStatus.SOLD,
-          buyerId: 2,
-          soldAt: new Date(),
-        }),
-      ],
-      affected: 1,
-    }),
+  execute: jest.fn().mockResolvedValue({
+    raw: [
+      makeAuction({
+        status: AuctionStatus.SOLD,
+        buyerId: 2,
+        soldAt: new Date(),
+      }),
+    ],
+    affected: 1,
+  }),
   getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
   getOne: jest.fn().mockResolvedValue(null),
 });
@@ -413,12 +411,10 @@ describe('AuctionsService — extra coverage', () => {
       const idRepo = makeIdempotencyRepo(idempotencyExisting);
       const auctionQbForBuy = {
         ...makeQb(),
-        execute: jest
-          .fn()
-          .mockResolvedValue({
-            raw: soldRaw ? [soldRaw] : [],
-            affected: soldRaw ? 1 : 0,
-          }),
+        execute: jest.fn().mockResolvedValue({
+          raw: soldRaw ? [soldRaw] : [],
+          affected: soldRaw ? 1 : 0,
+        }),
       };
       return {
         getRepository: jest.fn().mockImplementation((entity: any) => {
@@ -442,12 +438,10 @@ describe('AuctionsService — extra coverage', () => {
           where: jest.fn().mockReturnThis(),
           andWhere: jest.fn().mockReturnThis(),
           returning: jest.fn().mockReturnThis(),
-          execute: jest
-            .fn()
-            .mockResolvedValue({
-              raw: soldRaw ? [soldRaw] : [],
-              affected: soldRaw ? 1 : 0,
-            }),
+          execute: jest.fn().mockResolvedValue({
+            raw: soldRaw ? [soldRaw] : [],
+            affected: soldRaw ? 1 : 0,
+          }),
           insert: jest.fn().mockReturnThis(),
           into: jest.fn().mockReturnThis(),
           values: jest.fn().mockReturnThis(),

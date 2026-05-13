@@ -54,15 +54,13 @@ const makeGateway = (overrides: any = {}) => {
       createdAt: new Date(),
       message: d.message || 'msg',
     })),
-    findOne: jest
-      .fn()
-      .mockResolvedValue({
-        id: 1,
-        campaignId: 1,
-        userId: 1,
-        message: 'hi',
-        createdAt: new Date(),
-      }),
+    findOne: jest.fn().mockResolvedValue({
+      id: 1,
+      campaignId: 1,
+      userId: 1,
+      message: 'hi',
+      createdAt: new Date(),
+    }),
     ...overrides.messagesRepo,
   };
   const campaignsRepo = {

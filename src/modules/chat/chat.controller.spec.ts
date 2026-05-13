@@ -1,15 +1,13 @@
 import { ChatController } from './chat.controller';
 
 const makeService = () => ({
-  createMessage: jest
-    .fn()
-    .mockResolvedValue({
-      id: 1,
-      campaignId: 1,
-      userId: 2,
-      message: 'Hello',
-      createdAt: new Date(),
-    }),
+  createMessage: jest.fn().mockResolvedValue({
+    id: 1,
+    campaignId: 1,
+    userId: 2,
+    message: 'Hello',
+    createdAt: new Date(),
+  }),
 });
 
 describe('ChatController', () => {

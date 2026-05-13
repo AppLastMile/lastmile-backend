@@ -22,7 +22,9 @@ export function getTypeOrmConfig(
     extra: { family: 4 },
     autoLoadEntities: true,
     synchronize: !isProduction,
-    migrations: ['dist/migrations/*.js'],
-    migrationsRun: isProduction,
+    ...(isProduction && {
+      migrations: ['dist/migrations/*.js'],
+      migrationsRun: true,
+    }),
   };
 }

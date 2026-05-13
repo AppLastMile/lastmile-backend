@@ -457,8 +457,7 @@ export class LogisticsService {
   }> {
     const query = `${dto.address}, ${dto.city}, Colombia`;
     const url = new URL(
-      process.env.GEOCODING_URL ??
-        'https://nominatim.openstreetmap.org/search',
+      process.env.GEOCODING_URL ?? 'https://nominatim.openstreetmap.org/search',
     );
 
     url.searchParams.set('q', query);

@@ -8,10 +8,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import {
-  BadRequestException,
-  Logger,
-} from '@nestjs/common';
+import { BadRequestException, Logger } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -80,9 +77,7 @@ const isAllowedCorsOrigin = (origin?: string): boolean => {
     return true;
   }
 
-  return (
-    allowedCorsOrigins.has(origin) || expoTunnelOriginPattern.test(origin)
-  );
+  return allowedCorsOrigins.has(origin) || expoTunnelOriginPattern.test(origin);
 };
 
 @WebSocketGateway({
@@ -142,7 +137,9 @@ export class RealtimeGateway
         server.adapter(createAdapter(pubClient, subClient));
         this.logger.log('Socket.IO Redis adapter configured');
       } catch (err) {
-        this.logger.warn(`Failed to configure Redis adapter: ${err instanceof Error ? err.message : String(err)}`);
+        this.logger.warn(
+          `Failed to configure Redis adapter: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
   }
@@ -196,9 +193,7 @@ export class RealtimeGateway
       );
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'unknown';
-      this.logger.warn(
-        `WS auth rejected socket=${client.id} reason=${reason}`,
-      );
+      this.logger.warn(`WS auth rejected socket=${client.id} reason=${reason}`);
       client.emit('system.error', {
         code: 'AUTH_INVALID',
         message: 'Invalid authentication token',
@@ -583,14 +578,19 @@ export class RealtimeGateway
         lng,
         recordedAt: recordedAt.toISOString(),
         campaignId:
-          payload?.campaignId === undefined ? undefined : Number(payload.campaignId),
+          payload?.campaignId === undefined
+            ? undefined
+            : Number(payload.campaignId),
         shipmentId:
-          payload?.shipmentId === undefined ? undefined : Number(payload.shipmentId),
+          payload?.shipmentId === undefined
+            ? undefined
+            : Number(payload.shipmentId),
         correlationId,
       });
 
       const stale =
-        serverReceivedAt.getTime() - recordedAt.getTime() > this.staleThresholdMs;
+        serverReceivedAt.getTime() - recordedAt.getTime() >
+        this.staleThresholdMs;
 
       this.logger.log(
         `[tracking] received correlationId=${correlationId} userId=${client.data.userId} role=${client.data.role} lat=${lat} lng=${lng} recordedAt=${recordedAt.toISOString()} serverReceivedAt=${serverReceivedAt.toISOString()} normalized=${normalizedCoordinates} stale=${stale}`,
@@ -1067,9 +1067,15 @@ export class RealtimeGateway
     };
   }): { lat: number; lng: number; normalizedCoordinates: boolean } {
     const rawLat =
-      payload?.lat ?? payload?.latitude ?? payload?.coords?.lat ?? payload?.coords?.latitude;
+      payload?.lat ??
+      payload?.latitude ??
+      payload?.coords?.lat ??
+      payload?.coords?.latitude;
     const rawLng =
-      payload?.lng ?? payload?.longitude ?? payload?.coords?.lng ?? payload?.coords?.longitude;
+      payload?.lng ??
+      payload?.longitude ??
+      payload?.coords?.lng ??
+      payload?.coords?.longitude;
 
     const latCandidate = Number(rawLat);
     const lngCandidate = Number(rawLng);
@@ -1252,9 +1258,8 @@ export class RealtimeGateway
     client: AuthenticatedSocket,
     campaignId: number,
   ): Promise<void> {
-    const memoryLocations = this.volunteerLocationService.getCampaignLocations(
-      campaignId,
-    );
+    const memoryLocations =
+      this.volunteerLocationService.getCampaignLocations(campaignId);
 
     const rows = await this.shipmentLocationsRepository
       .createQueryBuilder('l')

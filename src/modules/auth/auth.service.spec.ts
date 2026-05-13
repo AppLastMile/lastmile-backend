@@ -11,14 +11,21 @@ describe('AuthService', () => {
   const mockTokenService = { generate: jest.fn().mockReturnValue('tok') };
 
   const makeService = (qbResult: unknown) => {
-    const repo = { createQueryBuilder: jest.fn().mockReturnValue(makeQb(qbResult)) };
+    const repo = {
+      createQueryBuilder: jest.fn().mockReturnValue(makeQb(qbResult)),
+    };
     return new AuthService(repo as any, mockTokenService as any);
   };
 
   beforeEach(() => jest.clearAllMocks());
 
   it('returns accessToken and user on valid credentials', async () => {
-    const user = { id: 1, email: 'a@b.com', role: 'volunteer', password: 'pass' };
+    const user = {
+      id: 1,
+      email: 'a@b.com',
+      role: 'volunteer',
+      password: 'pass',
+    };
     const svc = makeService(user);
     const result = await svc.login({ email: 'a@b.com', password: 'pass' });
     expect(result.accessToken).toBe('tok');
@@ -29,12 +36,21 @@ describe('AuthService', () => {
 
   it('throws UnauthorizedException when user not found', async () => {
     const svc = makeService(null);
-    await expect(svc.login({ email: 'x@x.com', password: 'p' })).rejects.toThrow(UnauthorizedException);
+    await expect(
+      svc.login({ email: 'x@x.com', password: 'p' }),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
   it('throws UnauthorizedException when password does not match', async () => {
-    const user = { id: 1, email: 'a@b.com', role: 'donor', password: 'correct' };
+    const user = {
+      id: 1,
+      email: 'a@b.com',
+      role: 'donor',
+      password: 'correct',
+    };
     const svc = makeService(user);
-    await expect(svc.login({ email: 'a@b.com', password: 'wrong' })).rejects.toThrow(UnauthorizedException);
+    await expect(
+      svc.login({ email: 'a@b.com', password: 'wrong' }),
+    ).rejects.toThrow(UnauthorizedException);
   });
 });

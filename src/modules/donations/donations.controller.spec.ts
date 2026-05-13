@@ -37,7 +37,12 @@ describe('DonationsController', () => {
   });
 
   it('createItemDonation() delegates to service', async () => {
-    const dto = { campaignId: 1, donorId: 1, itemName: 'water', quantity: 5 } as any;
+    const dto = {
+      campaignId: 1,
+      donorId: 1,
+      itemName: 'water',
+      quantity: 5,
+    } as any;
     await controller.createItemDonation(dto);
     expect(service.createItemDonation).toHaveBeenCalledWith(dto);
   });

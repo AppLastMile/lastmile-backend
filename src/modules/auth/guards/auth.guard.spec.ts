@@ -23,16 +23,24 @@ describe('AuthGuard', () => {
   });
 
   it('throws UnauthorizedException when no Authorization header', () => {
-    expect(() => guard.canActivate(makeContext(undefined) as any)).toThrow(UnauthorizedException);
+    expect(() => guard.canActivate(makeContext(undefined) as any)).toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('throws UnauthorizedException when header does not start with Bearer', () => {
-    expect(() => guard.canActivate(makeContext('Basic abc') as any)).toThrow(UnauthorizedException);
+    expect(() => guard.canActivate(makeContext('Basic abc') as any)).toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('propagates error from tokenService.verify', () => {
-    mockToken.verify.mockImplementation(() => { throw new UnauthorizedException('Invalid'); });
-    expect(() => guard.canActivate(makeContext('Bearer bad') as any)).toThrow(UnauthorizedException);
+    mockToken.verify.mockImplementation(() => {
+      throw new UnauthorizedException('Invalid');
+    });
+    expect(() => guard.canActivate(makeContext('Bearer bad') as any)).toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('is case-insensitive for Bearer prefix', () => {

@@ -24,7 +24,12 @@ describe('UsersController', () => {
   });
 
   it('create() delegates to service', async () => {
-    const dto = { name: 'Alice', email: 'a@b.com', password: 'p', role: 'volunteer' } as any;
+    const dto = {
+      name: 'Alice',
+      email: 'a@b.com',
+      password: 'p',
+      role: 'volunteer',
+    } as any;
     await controller.create(dto);
     expect(service.create).toHaveBeenCalledWith(dto);
   });

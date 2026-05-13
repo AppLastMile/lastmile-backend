@@ -49,11 +49,15 @@ export class RoomAuthorizationService {
       return room;
     }
 
-    const campaignVolunteers = room.match(/^campaign:(\d+):volunteers:tracking$/);
+    const campaignVolunteers = room.match(
+      /^campaign:(\d+):volunteers:tracking$/,
+    );
     if (campaignVolunteers) {
       await this.ensureCampaignVisible(Number(campaignVolunteers[1]), user);
       if (user.role !== UserRole.ORGANIZER) {
-        throw new ForbiddenException('Only organizers are allowed to subscribe to volunteers tracking');
+        throw new ForbiddenException(
+          'Only organizers are allowed to subscribe to volunteers tracking',
+        );
       }
       return room;
     }

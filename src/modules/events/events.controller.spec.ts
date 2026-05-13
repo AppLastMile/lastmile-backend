@@ -26,7 +26,14 @@ describe('EventsController', () => {
   });
 
   it('create() delegates to service', async () => {
-    const dto = { name: 'Flood', disasterType: 'flood', city: 'Bogota', description: 'd', date: '2025-01-01', createdBy: 1 } as any;
+    const dto = {
+      name: 'Flood',
+      disasterType: 'flood',
+      city: 'Bogota',
+      description: 'd',
+      date: '2025-01-01',
+      createdBy: 1,
+    } as any;
     await controller.create(dto);
     expect(service.create).toHaveBeenCalledWith(dto);
   });

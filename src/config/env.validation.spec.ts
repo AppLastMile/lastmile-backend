@@ -46,21 +46,33 @@ describe('validateEnv', () => {
 
   it('throws when JWT_SECRET is missing with DATABASE_URL', () => {
     const { JWT_SECRET: _j, ...rest } = baseWithUrl;
-    expect(() => validateEnv(rest)).toThrow('Missing required environment variable: JWT_SECRET');
+    expect(() => validateEnv(rest)).toThrow(
+      'Missing required environment variable: JWT_SECRET',
+    );
   });
 
   it('throws when JWT_SECRET is missing without DATABASE_URL', () => {
     const { JWT_SECRET: _j, ...rest } = baseWithVars;
-    expect(() => validateEnv(rest)).toThrow('Missing required environment variable: JWT_SECRET');
+    expect(() => validateEnv(rest)).toThrow(
+      'Missing required environment variable: JWT_SECRET',
+    );
   });
 
   it('throws when DB_HOST is missing and no DATABASE_URL', () => {
-    const { DB_HOST: _h, DATABASE_URL: _u, ...rest } = { ...baseWithVars, DATABASE_URL: undefined };
-    expect(() => validateEnv(rest)).toThrow('Missing required environment variable: DB_HOST');
+    const {
+      DB_HOST: _h,
+      DATABASE_URL: _u,
+      ...rest
+    } = { ...baseWithVars, DATABASE_URL: undefined };
+    expect(() => validateEnv(rest)).toThrow(
+      'Missing required environment variable: DB_HOST',
+    );
   });
 
   it('throws when PORT is not a number', () => {
-    expect(() => validateEnv({ ...baseWithUrl, PORT: 'notanumber' })).toThrow('must be a valid number');
+    expect(() => validateEnv({ ...baseWithUrl, PORT: 'notanumber' })).toThrow(
+      'must be a valid number',
+    );
   });
 
   it('treats empty DATABASE_URL as absent', () => {
@@ -71,11 +83,19 @@ describe('validateEnv', () => {
   });
 
   it('treats whitespace-only JWT_SECRET as missing', () => {
-    expect(() => validateEnv({ ...baseWithUrl, JWT_SECRET: '  ' })).toThrow('Missing required environment variable: JWT_SECRET');
+    expect(() => validateEnv({ ...baseWithUrl, JWT_SECRET: '  ' })).toThrow(
+      'Missing required environment variable: JWT_SECRET',
+    );
   });
 
   it('includes optional DB fields when DATABASE_URL is set', () => {
-    const config = { ...baseWithUrl, DB_HOST: 'myhost', DB_USERNAME: 'user', DB_PASSWORD: 'pw', DB_NAME: 'db' };
+    const config = {
+      ...baseWithUrl,
+      DB_HOST: 'myhost',
+      DB_USERNAME: 'user',
+      DB_PASSWORD: 'pw',
+      DB_NAME: 'db',
+    };
     const result = validateEnv(config);
     expect(result.DB_HOST).toBe('myhost');
     expect(result.DB_USERNAME).toBe('user');

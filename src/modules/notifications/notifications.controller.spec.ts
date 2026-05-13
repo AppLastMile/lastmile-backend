@@ -26,22 +26,46 @@ describe('NotificationsController', () => {
   });
 
   it('createTestForCurrentUser() uses provided message', async () => {
-    await controller.createTestForCurrentUser({ userId: 1, role: 'volunteer' }, { message: 'Hello' });
+    await controller.createTestForCurrentUser(
+      { userId: 1, role: 'volunteer' },
+      { message: 'Hello' },
+    );
     expect(service.create).toHaveBeenCalledWith(1, 'Hello', null);
   });
 
   it('createTestForCurrentUser() uses default message when body is empty', async () => {
-    await controller.createTestForCurrentUser({ userId: 1, role: 'volunteer' }, {});
-    expect(service.create).toHaveBeenCalledWith(1, 'Notificación de prueba', null);
+    await controller.createTestForCurrentUser(
+      { userId: 1, role: 'volunteer' },
+      {},
+    );
+    expect(service.create).toHaveBeenCalledWith(
+      1,
+      'Notificación de prueba',
+      null,
+    );
   });
 
   it('createTestForCurrentUser() uses default when message is whitespace', async () => {
-    await controller.createTestForCurrentUser({ userId: 1, role: 'volunteer' }, { message: '   ' });
-    expect(service.create).toHaveBeenCalledWith(1, 'Notificación de prueba', null);
+    await controller.createTestForCurrentUser(
+      { userId: 1, role: 'volunteer' },
+      { message: '   ' },
+    );
+    expect(service.create).toHaveBeenCalledWith(
+      1,
+      'Notificación de prueba',
+      null,
+    );
   });
 
   it('createTestForCurrentUser() works without body', async () => {
-    await controller.createTestForCurrentUser({ userId: 1, role: 'volunteer' }, undefined);
-    expect(service.create).toHaveBeenCalledWith(1, 'Notificación de prueba', null);
+    await controller.createTestForCurrentUser(
+      { userId: 1, role: 'volunteer' },
+      undefined,
+    );
+    expect(service.create).toHaveBeenCalledWith(
+      1,
+      'Notificación de prueba',
+      null,
+    );
   });
 });

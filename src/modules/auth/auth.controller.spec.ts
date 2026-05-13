@@ -1,7 +1,9 @@
 import { AuthController } from './auth.controller';
 
 describe('AuthController', () => {
-  const mockAuthService = { login: jest.fn().mockResolvedValue({ accessToken: 'tok', user: {} }) };
+  const mockAuthService = {
+    login: jest.fn().mockResolvedValue({ accessToken: 'tok', user: {} }),
+  };
   const controller = new AuthController(mockAuthService as any);
 
   beforeEach(() => jest.clearAllMocks());

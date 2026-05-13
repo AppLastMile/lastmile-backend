@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class MakePickupCoordinatesNullable1773300000000
-  implements MigrationInterface
-{
+export class MakePickupCoordinatesNullable1773300000000 implements MigrationInterface {
   name = 'MakePickupCoordinatesNullable1773300000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

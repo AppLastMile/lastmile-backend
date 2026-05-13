@@ -11,9 +11,16 @@ export type DisconnectedPresence = {
 @Injectable()
 export class VolunteerPresenceService {
   private readonly socketsByUserId = new Map<number, Set<string>>();
-  private readonly userBySocketId = new Map<string, { userId: number; role: PresenceRole }>();
+  private readonly userBySocketId = new Map<
+    string,
+    { userId: number; role: PresenceRole }
+  >();
 
-  registerConnection(socketId: string, userId: number, role: PresenceRole): void {
+  registerConnection(
+    socketId: string,
+    userId: number,
+    role: PresenceRole,
+  ): void {
     this.userBySocketId.set(socketId, { userId, role });
 
     const sockets = this.socketsByUserId.get(userId) ?? new Set<string>();
@@ -48,7 +55,9 @@ export class VolunteerPresenceService {
     return this.socketsByUserId.has(userId);
   }
 
-  getLinkedUser(socketId: string): { userId: number; role: PresenceRole } | null {
+  getLinkedUser(
+    socketId: string,
+  ): { userId: number; role: PresenceRole } | null {
     return this.userBySocketId.get(socketId) ?? null;
   }
 }

@@ -4,7 +4,9 @@ const makeService = () => ({
   create: jest.fn().mockResolvedValue({ id: 1 }),
   findAll: jest.fn().mockResolvedValue({ data: [], meta: {} }),
   findOneById: jest.fn().mockResolvedValue({ id: 1 }),
-  getItemsSummary: jest.fn().mockResolvedValue({ campaignId: 1, items: [], updatedAt: new Date() }),
+  getItemsSummary: jest
+    .fn()
+    .mockResolvedValue({ campaignId: 1, items: [], updatedAt: new Date() }),
   update: jest.fn().mockResolvedValue({ id: 1 }),
   remove: jest.fn().mockResolvedValue(undefined),
 });
@@ -31,7 +33,9 @@ describe('CampaignsController', () => {
 
   it('findByEvent() adds eventId to query', async () => {
     await controller.findByEvent(5, { page: 1 } as any);
-    expect(service.findAll).toHaveBeenCalledWith(expect.objectContaining({ eventId: 5 }));
+    expect(service.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: 5 }),
+    );
   });
 
   it('findOne() delegates to service', async () => {

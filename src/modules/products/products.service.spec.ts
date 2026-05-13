@@ -2,7 +2,12 @@ import { NotFoundException } from '@nestjs/common';
 import { ProductsService } from './products.service';
 
 const makeProduct = (overrides = {}) => ({
-  id: 1, name: 'Laptop', description: 'A laptop', createdBy: 1, createdAt: new Date(), ...overrides,
+  id: 1,
+  name: 'Laptop',
+  description: 'A laptop',
+  createdBy: 1,
+  createdAt: new Date(),
+  ...overrides,
 });
 
 const makeRepo = () => ({
@@ -17,7 +22,11 @@ describe('ProductsService', () => {
     it('creates product with description', async () => {
       const repo = makeRepo();
       const svc = new ProductsService(repo as any);
-      const result = await svc.create({ name: 'Laptop', description: 'A laptop', createdBy: 1 });
+      const result = await svc.create({
+        name: 'Laptop',
+        description: 'A laptop',
+        createdBy: 1,
+      });
       expect(result.name).toBe('Laptop');
     });
 

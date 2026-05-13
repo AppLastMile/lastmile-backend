@@ -10,7 +10,9 @@ const makeService = () => ({
   findShipments: jest.fn().mockResolvedValue({ data: [], meta: {} }),
   findShipmentById: jest.fn().mockResolvedValue({ id: 1 }),
   findShipmentLatestLocation: jest.fn().mockResolvedValue(null),
-  findShipmentLocationHistory: jest.fn().mockResolvedValue({ data: [], meta: {} }),
+  findShipmentLocationHistory: jest
+    .fn()
+    .mockResolvedValue({ data: [], meta: {} }),
   assignVolunteer: jest.fn().mockResolvedValue({ id: 1 }),
   updateShipmentStatusForVolunteer: jest.fn().mockResolvedValue({ id: 1 }),
 });
@@ -62,7 +64,9 @@ describe('LogisticsController', () => {
     const query = { assignedVolunteerId: 'me' } as any;
     const user = { userId: 7, role: 'volunteer' } as any;
     await controller.findShipments(query, user);
-    expect(service.findShipments).toHaveBeenCalledWith({ assignedVolunteerId: 7 });
+    expect(service.findShipments).toHaveBeenCalledWith({
+      assignedVolunteerId: 7,
+    });
   });
 
   it('findShipmentById() delegates to service', async () => {
@@ -90,6 +94,10 @@ describe('LogisticsController', () => {
     const dto = { status: ShipmentStatus.IN_TRANSIT } as any;
     const user = { userId: 3, role: 'volunteer' } as any;
     await controller.updateShipmentStatus(1, dto, user);
-    expect(service.updateShipmentStatusForVolunteer).toHaveBeenCalledWith(1, dto, 3);
+    expect(service.updateShipmentStatusForVolunteer).toHaveBeenCalledWith(
+      1,
+      dto,
+      3,
+    );
   });
 });

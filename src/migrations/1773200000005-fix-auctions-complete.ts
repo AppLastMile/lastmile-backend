@@ -80,10 +80,20 @@ export class FixAuctionsComplete1773200000005 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "uq_auction_buy_idempotency"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "auction_buy_idempotency_records"`);
-    await queryRunner.query(`ALTER TABLE "auctions" DROP COLUMN IF EXISTS "version"`);
-    await queryRunner.query(`ALTER TABLE "auctions" DROP COLUMN IF EXISTS "bidIncrement"`);
-    await queryRunner.query(`ALTER TABLE "auctions" DROP COLUMN IF EXISTS "bidMode"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "uq_auction_buy_idempotency"`,
+    );
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "auction_buy_idempotency_records"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "auctions" DROP COLUMN IF EXISTS "version"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "auctions" DROP COLUMN IF EXISTS "bidIncrement"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "auctions" DROP COLUMN IF EXISTS "bidMode"`,
+    );
   }
 }

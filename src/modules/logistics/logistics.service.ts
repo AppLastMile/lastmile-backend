@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -46,7 +47,13 @@ export class LogisticsService {
   async createPickupPoint(
     dto: CreatePickupPointDto,
   ): Promise<PickupPointResponseDto> {
-    const pickupPoint = this.pickupPointsRepository.create(dto);
+    const geocodedLocation = await this.geocodePickupPointAddress(dto);
+
+    const pickupPoint = this.pickupPointsRepository.create({
+      ...dto,
+      latitude: geocodedLocation.latitude,
+      longitude: geocodedLocation.longitude,
+    });
     const savedPickupPoint =
       await this.pickupPointsRepository.save(pickupPoint);
 
@@ -439,9 +446,72 @@ export class LogisticsService {
       city: pickupPoint.city,
       address: pickupPoint.address,
       eventId: pickupPoint.eventId,
-      latitude: pickupPoint.latitude ?? undefined,
-      longitude: pickupPoint.longitude ?? undefined,
+      latitude: pickupPoint.latitude ?? null,
+      longitude: pickupPoint.longitude ?? null,
     };
+  }
+
+  private async geocodePickupPointAddress(dto: CreatePickupPointDto): Promise<{
+    latitude: number;
+    longitude: number;
+  }> {
+    const query = `${dto.address}, ${dto.city}, Colombia`;
+    const url = new URL(
+      process.env.GEOCODING_URL ?? 'https://nominatim.openstreetmap.org/search',
+    );
+
+    url.searchParams.set('q', query);
+    url.searchParams.set('format', 'jsonv2');
+    url.searchParams.set('limit', '1');
+    url.searchParams.set('addressdetails', '0');
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        'User-Agent':
+          process.env.GEOCODING_USER_AGENT ??
+          'lastmile-backend/1.0 (geocoding)',
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new UnprocessableEntityException(
+        'No fue posible geocodificar la direccion del pickup point',
+      );
+    }
+
+    const payload = (await response.json()) as Array<{
+      lat?: string;
+      lon?: string;
+    }>;
+
+    if (!Array.isArray(payload) || payload.length === 0) {
+      throw new UnprocessableEntityException(
+        'No se encontraron coordenadas para la direccion del pickup point',
+      );
+    }
+
+    const latitude = Number(payload[0].lat);
+    const longitude = Number(payload[0].lon);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      throw new UnprocessableEntityException(
+        'Las coordenadas geocodificadas son invalidas',
+      );
+    }
+
+    if (
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      throw new UnprocessableEntityException(
+        'Las coordenadas geocodificadas estan fuera de rango',
+      );
+    }
+
+    return { latitude, longitude };
   }
 
   private toShipmentResponse(shipment: Shipment): ShipmentResponseDto {

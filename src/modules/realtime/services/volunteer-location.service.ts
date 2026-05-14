@@ -24,7 +24,10 @@ export type VolunteerDisconnectedDto = {
 
 @Injectable()
 export class VolunteerLocationService {
-  private readonly latestLocationByVolunteerId = new Map<number, VolunteerLocationDto>();
+  private readonly latestLocationByVolunteerId = new Map<
+    number,
+    VolunteerLocationDto
+  >();
 
   upsertLocation(location: VolunteerLocationDto): VolunteerLocationDto {
     this.latestLocationByVolunteerId.set(location.volunteerId, location);

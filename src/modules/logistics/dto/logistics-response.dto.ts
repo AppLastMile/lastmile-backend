@@ -6,8 +6,8 @@ export class PickupPointResponseDto {
   city!: string;
   address!: string;
   eventId!: number;
-  latitude?: number;
-  longitude?: number;
+  latitude!: number | null;
+  longitude!: number | null;
 }
 
 export class PaginatedPickupPointsDto {

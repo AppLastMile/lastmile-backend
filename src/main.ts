@@ -25,9 +25,7 @@ const isAllowedCorsOrigin = (origin?: string): boolean => {
     return true;
   }
 
-  return (
-    allowedCorsOrigins.has(origin) || expoTunnelOriginPattern.test(origin)
-  );
+  return allowedCorsOrigins.has(origin) || expoTunnelOriginPattern.test(origin);
 };
 
 async function bootstrap() {
